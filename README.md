@@ -280,12 +280,8 @@ print(f"Generated {len(test_cases)} test cases")
 | **README.md** | Project overview & quick start | Everyone |
 | **HOW_TO_RUN_EVERYTHING.md** | Complete system guide | **START HERE** |
 | **QUICK_REFERENCE.md** | Essential commands | Daily users |
-| **GETTING_STARTED.md** | Step-by-step beginner guide | New users |
-| **ARCHITECTURE.md** | Technical deep-dive | Developers |
-| **RL_TRAINING_EXPLAINED.md** | RL training comparison | ML practitioners |
 | **GAM_IMPLEMENTATION_GUIDE.md** | Memory system details | Advanced users |
 | **TESTING_GUIDE.md** | Testing & validation | QA engineers |
-| **SAMPLE_RUN_EXPLAINED.md** | Example execution walkthrough | Users |
 
 ---
 
