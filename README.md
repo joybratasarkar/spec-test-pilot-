@@ -46,7 +46,9 @@ python run_agent.py examples/banking_api.yaml
 python test_complete_system.py
 ```
 
-## 🏗️ System Architecture Flow
+## 🏗️ Detailed System Architecture Flow
+
+### **🎯 High-Level Architecture Overview**
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
@@ -59,6 +61,347 @@ python test_complete_system.py
 │    Sandbox      │    │ Trace Collection │    │ Tenant Scoping  │
 │ (Safe Testing)  │    │ (Sidecar Design) │    │ (Multi-tenant)  │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
+```
+
+### **🔄 Complete System Data Flow**
+
+```
+                           📋 USER INPUT
+                    ┌─────────────────────────┐
+                    │ OpenAPI Specification   │
+                    │ + Target Language       │
+                    │ + Tenant Information    │
+                    └───────────┬─────────────┘
+                                │
+                                ▼
+                    ⚡ AGENT LIGHTNING SERVER
+            ┌─────────────────────────────────────────────┐
+            │           🔍 Task Queue Manager              │
+            │  ┌─────────────────────────────────────┐   │
+            │  │ • Task validation & queuing         │   │
+            │  │ • Tenant isolation enforcement      │   │
+            │  │ • Resource allocation               │   │
+            │  │ • Concurrent task management        │   │
+            │  └─────────────────────────────────────┘   │
+            │                     │                       │
+            │                     ▼                       │
+            │           🔍 Sidecar Monitor                │
+            │  ┌─────────────────────────────────────┐   │
+            │  │ • Non-intrusive trace collection    │   │
+            │  │ • Real-time performance monitoring  │   │
+            │  │ • Error detection & recovery        │   │
+            │  │ • State-action-reward tracking      │   │
+            │  └─────────────────────────────────────┘   │
+            └─────────────────┬───────────────────────────┘
+                              │
+                              ▼
+                  🤖 AI AGENT EXECUTION LAYER
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                    🏖️ SANDBOX ENVIRONMENT                      │
+    │                                                                 │
+    │  ┌─────────────────────────────────────────────────────────┐   │
+    │  │              🌍 Multi-Language Tester                  │   │
+    │  │                                                         │   │
+    │  │  ┌─────────────────────────────────────────────────┐   │   │
+    │  │  │           🧠 AI Professional Tester            │   │   │
+    │  │  │                                                 │   │   │
+    │  │  │  Step 1: Parse OpenAPI Specification           │   │   │
+    │  │  │  ┌─────────────────────────────────────────┐   │   │   │
+    │  │  │  │ • Extract endpoints & methods          │   │   │   │
+    │  │  │  │ • Identify auth requirements           │   │   │   │
+    │  │  │  │ • Parse request/response schemas       │   │   │   │
+    │  │  │  │ • Detect parameter constraints         │   │   │   │
+    │  │  │  └─────────────────────────────────────────┘   │   │   │
+    │  │  │                     │                           │   │   │
+    │  │  │                     ▼                           │   │   │
+    │  │  │  Step 2: Professional Test Planning             │   │   │
+    │  │  │  ┌─────────────────────────────────────────┐   │   │   │
+    │  │  │  │ 😊 Happy Path: Normal operations       │   │   │   │
+    │  │  │  │ 💥 Error Handling: Graceful failures   │   │   │   │
+    │  │  │  │ 🔐 Authentication: Access control      │   │   │   │
+    │  │  │  │ ⚖️ Authorization: Permission checks     │   │   │   │
+    │  │  │  │ 🛡️ Input Validation: Bad data rejection │   │   │   │
+    │  │  │  │ 🎯 Boundary Testing: Edge value limits  │   │   │   │
+    │  │  │  │ 🔒 Security Testing: Injection attacks  │   │   │   │
+    │  │  │  │ 🔄 Edge Cases: Unusual valid scenarios  │   │   │   │
+    │  │  │  └─────────────────────────────────────────┘   │   │   │
+    │  │  │                     │                           │   │   │
+    │  │  │                     ▼                           │   │   │
+    │  │  │  Step 3: Multi-Language Code Generation         │   │   │
+    │  │  │  ┌─────────────────────────────────────────┐   │   │   │
+    │  │  │  │ 🐍 Python (pytest)                     │   │   │   │
+    │  │  │  │ 🟨 JavaScript (Jest/Mocha)              │   │   │   │
+    │  │  │  │ ☕ Java (RestAssured/TestNG)            │   │   │   │
+    │  │  │  │ 🌐 cURL (Shell scripts)                 │   │   │   │
+    │  │  │  │ 📚 Documentation (TEST_PLAN.md)         │   │   │   │
+    │  │  │  │ 📦 Package files (deps & setup)         │   │   │   │
+    │  │  │  └─────────────────────────────────────────┘   │   │   │
+    │  │  └─────────────────────────────────────────────────┘   │   │
+    │  │                                                         │   │
+    │  │               🔒 Sandbox Safety Layer                   │   │
+    │  │  ┌─────────────────────────────────────────────────┐   │   │
+    │  │  │ • Isolated temporary directories            │   │   │
+    │  │  │ • Mock LLM provider (no external calls)     │   │   │
+    │  │  │ • Deterministic test generation             │   │   │
+    │  │  │ • Automatic resource cleanup                │   │   │
+    │  │  │ • No main project directory pollution       │   │   │
+    │  │  └─────────────────────────────────────────────────┘   │   │
+    │  └─────────────────────────────────────────────────────────┘   │
+    └─────────────────────────────────────┬───────────────────────────┘
+                                          │
+                                          ▼
+                            📝 GAM MEMORY INTEGRATION
+              ┌─────────────────────────────────────────────────────┐
+              │             🧠 Session Management                   │
+              │                                                     │
+              │  ┌─────────────────────────────────────────────┐   │
+              │  │ Session Lifecycle:                          │   │
+              │  │ 1. start_session(tenant_id) → session_id   │   │
+              │  │ 2. add_to_session(role, content, artifacts) │   │
+              │  │ 3. track_tool_outputs(results)             │   │
+              │  │ 4. end_session_with_memo(context, decisions)│   │
+              │  └─────────────────────────────────────────────┘   │
+              │                     │                               │
+              │                     ▼                               │
+              │          🎯 Dual Memory Creation                    │
+              │  ┌─────────────────────┬─────────────────────────┐ │
+              │  │  📚 Lossless Pages   │  📝 Contextual Memos     │ │
+              │  │                     │                         │ │
+              │  │ • Complete session  │ • Smart summaries       │ │
+              │  │   transcripts       │ • Key decisions made    │ │
+              │  │ • All tool outputs  │ • Technology choices    │ │
+              │  │ • Generated files   │ • page_id pointers      │ │
+              │  │ • Full context      │ • Searchable headers    │ │
+              │  └─────────────────────┴─────────────────────────┘ │
+              │                     │                               │
+              │                     ▼                               │
+              │            🔐 Tenant Isolation                     │
+              │  ┌─────────────────────────────────────────────┐   │
+              │  │ • Tenant-scoped data storage                │   │
+              │  │ • Secure search filtering                   │   │
+              │  │ • Cross-tenant data prevention              │   │
+              │  │ • Compliance-ready separation               │   │
+              │  └─────────────────────────────────────────────┘   │
+              └─────────────────┬───────────────────────────────────┘
+                                │
+                                ▼
+                    ⚡ REINFORCEMENT LEARNING PIPELINE
+          ┌─────────────────────────────────────────────────────────────┐
+          │                🔄 Trace Processing                          │
+          │                                                             │
+          │  ┌─────────────────────────────────────────────────────┐   │
+          │  │           📊 Execution Trace Collection             │   │
+          │  │                                                     │   │
+          │  │  Raw Traces → RL Transitions:                      │   │
+          │  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │   │
+          │  │  │State_t  │→│Action_t │→│Reward_t │→│State_t+1│   │   │
+          │  │  │         │ │         │ │         │ │         │   │   │
+          │  │  │API_spec │ │test_gen │ │quality  │ │improved │   │   │
+          │  │  │context  │ │decision │ │score    │ │agent    │   │   │
+          │  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘   │   │
+          │  └─────────────────────────────────────────────────────┘   │
+          │                           │                                 │
+          │                           ▼                                 │
+          │              🧠 Credit Assignment Module                    │
+          │  ┌─────────────────────────────────────────────────────┐   │
+          │  │ Temporal Credit Assignment:                         │   │
+          │  │                                                     │   │
+          │  │ R_t = r_t + γ * R_{t+1}                            │   │
+          │  │                                                     │   │
+          │  │ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐           │   │
+          │  │ │ 1.8 │←│ 1.5 │←│ 1.2 │←│ 0.8 │←│ 0.3 │ (Final)   │   │
+          │  │ └─────┘ └─────┘ └─────┘ └─────┘ └─────┘           │   │
+          │  │    ▲       ▲       ▲       ▲       ▲               │   │
+          │  │  Parse   Plan   Generate Code  Validate Quality    │   │
+          │  │  API     Tests   Tests      Tests   Result         │   │
+          │  └─────────────────────────────────────────────────────┘   │
+          │                           │                                 │
+          │                           ▼                                 │
+          │                🎯 Neural Network Training                   │
+          │  ┌─────────────────────────────────────────────────────┐   │
+          │  │              LightningRL Algorithm                  │   │
+          │  │                                                     │   │
+          │  │ Experience Buffer: Store transitions for batch      │   │
+          │  │ ┌─────────────────────────────────────────────┐     │   │
+          │  │ │ [(s₁,a₁,r₁,s₁'), (s₂,a₂,r₂,s₂'), ...]      │     │   │
+          │  │ └─────────────────────────────────────────────┘     │   │
+          │  │                     │                               │   │
+          │  │                     ▼                               │   │
+          │  │ Value Network Architecture:                         │   │
+          │  │ ┌─────────────────────────────────────────────┐     │   │
+          │  │ │ Input(512) → Hidden(256) → Hidden(128) →   │     │   │
+          │  │ │ Output(1)  [Value Estimation]              │     │   │
+          │  │ └─────────────────────────────────────────────┘     │   │
+          │  │                     │                               │   │
+          │  │                     ▼                               │   │
+          │  │ Training Process:                                   │   │
+          │  │ • Sample mini-batch from experience buffer          │   │
+          │  │ • Forward pass: predicted_values = network(states) │   │
+          │  │ • Loss calculation: MSE(predicted, target_values)  │   │
+          │  │ • Backpropagation: optimizer.step()               │   │
+          │  │ • Policy improvement for better test generation    │   │
+          │  └─────────────────────────────────────────────────────┘   │
+          └─────────────────────────────────┬───────────────────────────┘
+                                            │
+                                            ▼
+                              🔍 INTELLIGENT CONTEXT RETRIEVAL
+                ┌─────────────────────────────────────────────────────┐
+                │                🧠 GAM Deep Research                 │
+                │                                                     │
+                │  When agent needs context for better decisions:     │
+                │                                                     │
+                │  Step 1: PLAN                                      │
+                │  ┌─────────────────────────────────────────────┐   │
+                │  │ • Analyze current task requirements         │   │
+                │  │ • Identify knowledge gaps                   │   │
+                │  │ • Select appropriate search strategies      │   │
+                │  │ • Plan multi-modal retrieval approach      │   │
+                │  └─────────────────────────────────────────────┘   │
+                │                     │                               │
+                │                     ▼                               │
+                │  Step 2: SEARCH                                    │
+                │  ┌─────────────────────────────────────────────┐   │
+                │  │ 🔍 BM25 Search: "OAuth security testing"    │   │
+                │  │ 🧠 Vector Search: Semantic similarity       │   │
+                │  │ 🔗 Direct ID: page_id lookup                │   │
+                │  │ 🔐 Tenant Filter: Secure data isolation     │   │
+                │  └─────────────────────────────────────────────┘   │
+                │                     │                               │
+                │                     ▼                               │
+                │  Step 3: INTEGRATE                                 │
+                │  ┌─────────────────────────────────────────────┐   │
+                │  │ • Combine memo headers with lossless data   │   │
+                │  │ • Follow page_id pointers for full context  │   │
+                │  │ • Build comprehensive knowledge base        │   │
+                │  │ • Create contextually perfect information   │   │
+                │  └─────────────────────────────────────────────┘   │
+                │                     │                               │
+                │                     ▼                               │
+                │  Step 4: REFLECT                                   │
+                │  ┌─────────────────────────────────────────────┐   │
+                │  │ • Assess information completeness           │   │
+                │  │ • Validate context relevance               │   │
+                │  │ • Determine if more search needed          │   │
+                │  │ • Finalize optimal context compilation     │   │
+                │  └─────────────────────────────────────────────┘   │
+                └─────────────────┬───────────────────────────────────┘
+                                  │
+                                  ▼
+                        ✅ IMPROVED AGENT OUTPUT
+                  ┌─────────────────────────────────────────┐
+                  │        🚀 Enhanced Test Generation      │
+                  │                                         │
+                  │ • Smarter test scenarios               │
+                  │ • Better security coverage             │
+                  │ • More comprehensive edge cases        │
+                  │ • Professional-quality patterns       │
+                  │ • Context-aware test names             │
+                  │ • Intelligent error detection          │
+                  │                                         │
+                  │ Result: Production-ready test suites   │
+                  │ across multiple programming languages   │
+                  └─────────────────────────────────────────┘
+```
+
+### **🔗 Component Interaction Details**
+
+#### **1. Agent Lightning Server ⚡**
+```python
+# Server initialization and task processing
+class AgentLightningServer:
+    def __init__(self, max_workers=4):
+        self.task_queue = TaskQueue()
+        self.sidecar_monitor = SidecarMonitor()
+        self.rl_algorithm = LightningRLAlgorithm()
+        
+    def process_task(self, task):
+        # 1. Validate and queue task
+        task_id = self.task_queue.enqueue(task)
+        
+        # 2. Start monitoring
+        self.sidecar_monitor.start_monitoring(task_id)
+        
+        # 3. Execute agent (sandbox or real)
+        result = self.execute_agent(task)
+        
+        # 4. Collect traces and train
+        traces = self.sidecar_monitor.get_traces(task_id)
+        self.rl_algorithm.train_on_traces(traces, result)
+        
+        return result
+```
+
+#### **2. Multi-Language Test Generator 🌍**
+```python
+# Professional test generation across languages
+class MultiLanguageTestGenerator:
+    def think_like_tester(self, api_spec):
+        scenarios = []
+        
+        # Professional test categories
+        for endpoint in self.parse_endpoints(api_spec):
+            scenarios.extend(self.create_happy_path_tests(endpoint))
+            scenarios.extend(self.create_security_tests(endpoint))
+            scenarios.extend(self.create_auth_tests(endpoint))
+            # ... 8 total categories
+            
+        return scenarios
+    
+    def generate_all_languages(self, scenarios):
+        return {
+            'python': self.generate_python_tests(scenarios),
+            'javascript': self.generate_js_tests(scenarios), 
+            'java': self.generate_java_tests(scenarios),
+            'curl': self.generate_curl_tests(scenarios)
+        }
+```
+
+#### **3. GAM Memory Integration 🧠**
+```python
+# Intelligent memory with session management
+class GAMMemorySystem:
+    def intelligent_session_flow(self, task):
+        # Start session with tenant isolation
+        session_id = self.start_session(tenant_id=task.tenant_id)
+        
+        # Track all interactions
+        self.add_to_session(session_id, "user", task.description)
+        self.add_to_session(session_id, "assistant", result.content, 
+                          artifacts=result.generated_files)
+        
+        # Create dual memory: lossless + contextual
+        lossless_pages, memo = self.end_session_with_memo(
+            session_id, 
+            title=task.title,
+            decisions=["OAuth 2.0 PKCE", "pytest framework"],
+            technologies=["Python", "REST API"]
+        )
+        
+        return session_id, memo.id
+```
+
+#### **4. Reinforcement Learning Pipeline ⚡**
+```python
+# RL training on test generation quality
+class LightningRLAlgorithm:
+    def train_on_traces(self, traces, final_result):
+        # Convert execution traces to RL transitions
+        transitions = self.organize_trajectory(traces, final_result)
+        
+        # Apply temporal credit assignment
+        rewards = self.credit_assignment.assign_credit(
+            traces, final_result.quality_score, final_result.success
+        )
+        
+        # Train neural network
+        for transition, reward in zip(transitions, rewards):
+            self.experience_buffer.add(transition, reward)
+            
+        # Update policy
+        if len(self.experience_buffer) >= self.batch_size:
+            batch = self.experience_buffer.sample(self.batch_size)
+            loss = self.compute_loss(batch)
+            self.optimizer.step()
 ```
 
 ## 🔄 Complete Training Flow
