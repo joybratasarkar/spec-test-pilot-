@@ -44,6 +44,12 @@ python run_agent.py examples/banking_api.yaml
 
 # 🧪 Integration testing
 python test_complete_system.py
+
+# 🧰 Generate OpenAPI + run QA agent for another domain
+./run_qa_domain.sh --domain healthcare
+./run_qa_domain.sh --domain logistics --action generate
+./run_qa_domain.sh --spec-path ./my_api.yaml --action run
+./run_qa_domain.sh --domain ecommerce --rl-checkpoint /tmp/qa_lightning_checkpoint.pt
 ```
 
 ## ✅ Current QA Specialist Architecture (Authoritative)
@@ -84,7 +90,8 @@ flowchart TD
 1. Agent Lightning training is executed in each QA run via `train_agent(...)`.
 2. RL training stats are embedded in the run report.
 3. Adaptive scenario policy uses RL risk estimation during selection.
-4. Full official `LightningStore` parity is a planned next step (current implementation is conceptually aligned, not full store API adoption).
+4. RL checkpoint save/load persists replay/model state across process restarts when the same checkpoint path is used.
+5. Full official `LightningStore` parity is a planned next step (current implementation is conceptually aligned, not full store API adoption).
 
 ## 🏗️ Legacy Conceptual Architecture Flow (Historical Reference)
 

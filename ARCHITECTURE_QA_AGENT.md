@@ -64,18 +64,19 @@ Input(spec, tenant, prompt)
   -> start GAM session
   -> GAM deep research (plan/search/integrate/reflect)
   -> scenario generation (human-style QA)
-  -> runtime tracing (spans + resources for learning context)
+  -> runtime signal capture preparation (action/observation traces via learning plane)
   -> adaptive policy selection (contextual linear-UCB)
   -> multi-language test artifact generation
   -> isolated execution against dynamic mock API
   -> collect per-scenario results
   -> summarize pass/fail, latency, failures
   -> update adaptive policy state from rewards/penalties
+  -> store transcript + artifacts + memo in GAM
   -> build RL task payload + reward
   -> Agent Lightning runner-equivalent processes traces and transitions
   -> Algorithm trains from replay/store-backed transitions
-  -> store transcript + artifacts + memo in GAM
   -> receive RL training stats
+  -> persist learning_state.json
   -> emit JSON + Markdown report
 ```
 
@@ -102,9 +103,9 @@ sequenceDiagram
     S-->>A: per-scenario status, duration, response/error
     A->>A: build summary + compute run/decision rewards
     A->>P: update policy state from decision signals
+    A->>G: add run artifacts + end_session_with_memo()
     A->>L: train_agent(task_payload, learning_reward_score)
     L-->>A: training_result + training_stats
-    A->>G: add run artifacts + end_session_with_memo()
     A->>R: write JSON/Markdown report + learning_state.json
     R-->>U: output file paths + run summary
 ```
@@ -114,17 +115,18 @@ sequenceDiagram
 | Step | Component | Inputs | Processing | Outputs | Persisted State |
 |---|---|---|---|---|---|
 | 1 | Control Plane (CLI) | `spec_path`, `tenant_id`, `prompt`, `max_scenarios`, `pass_threshold`, `output_dir` | Initializes run configuration and paths | Agent instance with runtime config | None |
-| 2 | Spec Loader | OpenAPI YAML/JSON file bytes | Parses + validates top-level object | Parsed `spec` dictionary | Optional copied spec in run folder (`openapi_under_test.yaml`) |
+| 2 | Spec Loader | OpenAPI YAML/JSON file bytes | Parses + validates top-level object | Parsed `spec` dictionary | None |
 | 3 | GAM Session Start | `tenant_id`, spec metadata | Opens tenant-scoped session and records init event | `session_id` | GAM session transcript pages |
 | 4 | GAM Research | Spec title, auth type, endpoint metadata, tenant context | plan -> search -> integrate -> reflect | Research plan, reflection, memory excerpts | GAM research traces and pages |
 | 5 | Scenario Generation | Parsed spec + effective prompt (user prompt + memory excerpts) | HumanTesterSimulator generates candidate scenarios | Candidate `TestScenario[]` | None |
 | 6 | Adaptive Selection | Candidate scenarios, policy state (`A`, `b`, scenario stats), RL risk estimate | Scores candidates (expected reward + uncertainty + failure focus + novelty + diversity penalties) and selects top-K | Selected scenarios + selection trace | `learning_state.json` fields: `adaptive_policy`, `scenario_stats`, `selection_trace` |
 | 7 | Test Artifact Generation | Selected scenarios + `base_url` | Generates Python/JS/Java/cURL tests | `generated_tests/*` files | Generated test artifacts in output directory |
-| 8 | Isolation Execution | Selected scenarios + copied spec | Builds dynamic FastAPI mock server and executes each scenario via TestClient | Per-scenario results (`expected_status`, `actual_status`, `passed`, `duration`, `error`) | Scenario execution results in report |
+| 8 | Isolation Execution | Selected scenarios + copied spec | Builds dynamic FastAPI mock server and executes each scenario via TestClient | Per-scenario results (`expected_status`, `actual_status`, `passed`, `duration`, `error`) | `openapi_under_test.yaml` copy + scenario execution results in report |
 | 9 | Summary + Reward | Scenario results + endpoint count + thresholds | Computes pass-rate metrics, quality gate, run reward, decision rewards | Summary object + decision learning signals | Included in report (`learning.feedback`) |
-| 10 | Learning State Update | Decision signals + previous weights/stats | Updates test-type weights, endpoint weights, scenario stats, policy posterior (`A`, `b`) | Updated learning snapshot | `learning_state.json` persisted to disk |
-| 11 | Agent Lightning Training | `task_payload` (`pass_rate`, `failed_scenarios`, summary, `learning_reward_score`) | Collects traces, assigns credit, creates transitions, executes RL `train_step` | `training_result`, `training_stats` | In-process RL replay/model state; reported in JSON/MD |
-| 12 | Report + Memo Finalization | Summary, learning, GAM, RL stats, generated file map | Writes report files and final memo, links artifacts | `qa_execution_report.json`, `qa_execution_report.md` | Report files + GAM memo/lossless pages |
+| 10 | Learning State Update | Decision signals + previous weights/stats | Updates test-type weights, endpoint weights, scenario stats, policy posterior (`A`, `b`) | Updated learning snapshot | In-memory state ready for final persistence |
+| 11 | GAM Memo Finalization | Summary, issues, decisions, artifacts | Adds execution artifacts to session and closes session with memo | Memo page + lossless page ids | GAM memo/lossless pages |
+| 12 | Agent Lightning Training | `task_payload` (`pass_rate`, `failed_scenarios`, summary, `learning_reward_score`) | Collects traces, assigns credit, creates transitions, executes RL `train_step` and autosaves checkpoint | `training_result`, `training_stats` | RL model/replay persisted to checkpoint file + reported in JSON/MD |
+| 13 | Report Persistence | Summary, learning, GAM, RL stats, generated file map | Writes JSON/MD reports and saves learning state file | `qa_execution_report.json`, `qa_execution_report.md`, `learning_state.json` | Report files + persisted learning state |
 
 ### 4.3 Learning Plane I/O (Focused)
 
@@ -217,7 +219,8 @@ Current repo mapping:
 3. `CreditAssignmentModule` performs trajectory credit assignment.
 4. `LightningRLAlgorithm` holds replay buffer and runs `train_step`.
 5. QA agent invokes RL each run (`train_agent`) and writes training stats to reports.
-6. This is aligned conceptually with Agent Lightning disaggregation, but not yet a full adoption of the official `LightningStore` data model APIs.
+6. RL checkpoint save/load is implemented for replay + model/optimizer state, enabling learning continuity across process restarts when the same checkpoint path is used.
+7. This is aligned conceptually with Agent Lightning disaggregation, but not yet a full adoption of the official `LightningStore` data model APIs.
 
 ### 5.6 Adaptive Selection Policy
 Responsibilities:
@@ -273,7 +276,7 @@ Report includes:
 2. Sidecar traces become transitions.
 3. Replay buffer grows during process lifetime.
 4. Value loss trends indicate model fitting progress.
-5. Without model checkpointing, CLI restarts reset replay buffer/model weights.
+5. With checkpoint enabled, CLI restarts can resume replay buffer/model weights from checkpoint path.
 6. Full official-store parity (Rollout/Attempt/Span/Resource persistence) is not yet implemented.
 
 ### 7.3 Policy-Controlled Learning (Implemented)
@@ -291,10 +294,11 @@ Current state:
 3. GAM sessions/memos/pages are created and searchable.
 4. Agent Lightning training executes on each run and exposes training stats.
 5. Adaptive policy learns from per-scenario reward/penalty and persists across runs.
-6. Test suite passes.
+6. Agent Lightning checkpoint save/load persists RL state across restarts.
+7. Test suite passes.
 
 ### 8.2 Improvement Needed
-1. Persistent Agent Lightning model/replay checkpoints across separate process runs.
+1. Checkpoint lifecycle management (rotation, retention, corruption recovery).
 2. Stronger reward shaping (coverage deltas, severity-weighted failures, flake penalty).
 3. Real SUT mode in addition to mock mode.
 4. Multi-step policy actions (workflow chains, retries, recovery scenarios) beyond one-pass ranking.
@@ -353,7 +357,7 @@ Current state:
 7. Adaptive policy subsystem: `spec_test_pilot/adaptive_policy.py`
 
 ## 14. Recommended Next Technical Changes
-1. Add `model_store/` for RL checkpoint save/load.
+1. Add checkpoint lifecycle controls (rotation, retention, integrity checks, rollback policy).
 2. Add `reward_service.py` with explainable reward components.
 3. Add `run_registry` persistence (SQLite/Postgres).
 4. Add policy-action API for multi-step planning (selection + retry + remediation).
@@ -369,4 +373,4 @@ Current state:
 ## 16. Summary
 The current architecture is a stronger v2: it executes the full QA workflow with isolation, memory, RL instrumentation, and an adaptive selection policy.
 
-The highest-value next step is persistence and governance at scale: durable Agent Lightning checkpointing, run registry, and policy rollout controls.
+The highest-value next step is governance at scale: checkpoint lifecycle management, run registry, official store-model parity, and policy rollout controls.

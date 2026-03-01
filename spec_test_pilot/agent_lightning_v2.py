@@ -23,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 import logging
 import numpy as np
 from collections import deque, defaultdict
+from pathlib import Path
 
 # Optional ML dependencies
 try:
@@ -338,6 +339,183 @@ class LightningRLAlgorithm:
         """Encode action dictionary to vector."""
         return self._encode_state(action)  # Same encoding for simplicity
 
+    def _trace_to_dict(self, trace: AgentTrace) -> Dict[str, Any]:
+        return {
+            "trace_id": trace.trace_id,
+            "session_id": trace.session_id,
+            "agent_id": trace.agent_id,
+            "timestamp": float(trace.timestamp),
+            "trace_type": trace.trace_type,
+            "content": trace.content,
+            "parent_trace_id": trace.parent_trace_id,
+            "metadata": trace.metadata,
+        }
+
+    def _trace_from_dict(self, payload: Dict[str, Any]) -> AgentTrace:
+        return AgentTrace(
+            trace_id=str(payload.get("trace_id", str(uuid.uuid4()))),
+            session_id=str(payload.get("session_id", "")),
+            agent_id=str(payload.get("agent_id", "")),
+            timestamp=float(payload.get("timestamp", time.time())),
+            trace_type=str(payload.get("trace_type", "observation")),
+            content=dict(payload.get("content", {})),
+            parent_trace_id=payload.get("parent_trace_id"),
+            metadata=dict(payload.get("metadata", {})),
+        )
+
+    def _transition_to_dict(self, transition: TrainingTransition) -> Dict[str, Any]:
+        return {
+            "state": transition.state,
+            "action": transition.action,
+            "reward": float(transition.reward),
+            "next_state": transition.next_state,
+            "done": bool(transition.done),
+            "trace_sequence": [self._trace_to_dict(t) for t in transition.trace_sequence],
+            "session_id": transition.session_id,
+            "agent_id": transition.agent_id,
+        }
+
+    def _transition_from_dict(self, payload: Dict[str, Any]) -> TrainingTransition:
+        trace_sequence = [
+            self._trace_from_dict(item) for item in payload.get("trace_sequence", [])
+            if isinstance(item, dict)
+        ]
+        return TrainingTransition(
+            state=dict(payload.get("state", {})),
+            action=dict(payload.get("action", {})),
+            reward=float(payload.get("reward", 0.0)),
+            next_state=dict(payload.get("next_state", {})),
+            done=bool(payload.get("done", False)),
+            trace_sequence=trace_sequence,
+            session_id=str(payload.get("session_id", "")),
+            agent_id=str(payload.get("agent_id", "")),
+        )
+
+    def build_checkpoint_payload(
+        self,
+        include_replay_buffer: bool = True,
+        max_replay_items: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        transitions: List[TrainingTransition]
+        if include_replay_buffer:
+            transitions = list(self.replay_buffer)
+            if max_replay_items and max_replay_items > 0:
+                transitions = transitions[-max_replay_items:]
+        else:
+            transitions = []
+
+        payload: Dict[str, Any] = {
+            "metadata": {
+                "algorithm": "LightningRLAlgorithm",
+                "state_dim": self.state_dim,
+                "hidden_dim": self.hidden_dim,
+                "learning_rate": self.learning_rate,
+                "batch_size": self.batch_size,
+                "training_steps": int(self.training_steps),
+                "buffer_size": len(self.replay_buffer),
+                "checkpoint_time": time.time(),
+            },
+            "replay_buffer": [self._transition_to_dict(t) for t in transitions],
+        }
+
+        if TORCH_AVAILABLE and hasattr(self, "value_net"):
+            payload["model"] = {
+                "value_net": self.value_net.state_dict(),
+                "policy_net": self.policy_net.state_dict(),
+                "value_optimizer": self.value_optimizer.state_dict(),
+                "policy_optimizer": self.policy_optimizer.state_dict(),
+            }
+        return payload
+
+    def load_checkpoint_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(payload, dict):
+            return {"status": "error", "reason": "invalid_checkpoint_payload"}
+
+        meta = payload.get("metadata", {})
+        self.training_steps = int(meta.get("training_steps", self.training_steps))
+
+        replay_items = payload.get("replay_buffer", [])
+        loaded_replay = 0
+        if isinstance(replay_items, list):
+            for item in replay_items:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    self.replay_buffer.append(self._transition_from_dict(item))
+                    loaded_replay += 1
+                except Exception:
+                    continue
+
+        loaded_models = False
+        if TORCH_AVAILABLE and hasattr(self, "value_net"):
+            model = payload.get("model", {})
+            if isinstance(model, dict) and model:
+                try:
+                    if "value_net" in model:
+                        self.value_net.load_state_dict(model["value_net"])
+                    if "policy_net" in model:
+                        self.policy_net.load_state_dict(model["policy_net"])
+                    if "value_optimizer" in model:
+                        self.value_optimizer.load_state_dict(model["value_optimizer"])
+                    if "policy_optimizer" in model:
+                        self.policy_optimizer.load_state_dict(model["policy_optimizer"])
+                    loaded_models = True
+                except Exception:
+                    loaded_models = False
+
+        return {
+            "status": "loaded",
+            "training_steps": self.training_steps,
+            "replay_loaded": loaded_replay,
+            "models_loaded": loaded_models,
+        }
+
+    def save_checkpoint(
+        self,
+        checkpoint_path: Union[str, Path],
+        include_replay_buffer: bool = True,
+        max_replay_items: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        path = Path(checkpoint_path).expanduser().resolve()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = self.build_checkpoint_payload(
+            include_replay_buffer=include_replay_buffer,
+            max_replay_items=max_replay_items,
+        )
+        if TORCH_AVAILABLE:
+            torch.save(payload, str(path))
+        else:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(payload, f)
+        return {
+            "status": "saved",
+            "path": str(path),
+            "training_steps": self.training_steps,
+            "buffer_size": len(self.replay_buffer),
+        }
+
+    def load_checkpoint(
+        self,
+        checkpoint_path: Union[str, Path],
+        allow_missing: bool = True,
+    ) -> Dict[str, Any]:
+        path = Path(checkpoint_path).expanduser().resolve()
+        if not path.exists():
+            status = {"status": "missing", "path": str(path)}
+            if allow_missing:
+                return status
+            raise FileNotFoundError(str(path))
+
+        if TORCH_AVAILABLE:
+            payload = torch.load(str(path), map_location="cpu")
+        else:
+            with open(path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+
+        loaded = self.load_checkpoint_payload(payload)
+        loaded["path"] = str(path)
+        return loaded
+
 
 class AgentLightningTrainer:
     """
@@ -352,13 +530,17 @@ class AgentLightningTrainer:
         collector: Optional[ObservabilityCollector] = None,
         credit_assignment: Optional[CreditAssignmentModule] = None,
         rl_algorithm: Optional[LightningRLAlgorithm] = None,
-        gam_memory_system = None
+        gam_memory_system = None,
+        checkpoint_path: Optional[str] = None,
+        checkpoint_autosave: bool = True,
     ):
         # Initialize components
         self.collector = collector or ObservabilityCollector()
         self.credit_assignment = credit_assignment or CreditAssignmentModule()
         self.rl_algorithm = rl_algorithm or LightningRLAlgorithm()
         self.gam_memory = gam_memory_system
+        self.checkpoint_path = str(checkpoint_path) if checkpoint_path else None
+        self.checkpoint_autosave = bool(checkpoint_autosave)
         
         # Registered agents
         self.agents: Dict[str, Callable] = {}
@@ -369,6 +551,15 @@ class AgentLightningTrainer:
         self.logger = logging.getLogger(__name__)
         
         self.logger.info("Agent Lightning trainer initialized")
+        if self.checkpoint_path:
+            load_result = self.load_checkpoint(self.checkpoint_path, allow_missing=True)
+            if load_result.get("status") == "loaded":
+                self.logger.info(
+                    "Loaded Agent Lightning checkpoint from %s (steps=%s, replay=%s)",
+                    self.checkpoint_path,
+                    load_result.get("training_steps", 0),
+                    load_result.get("replay_loaded", 0),
+                )
     
     def register_agent(
         self, 
@@ -552,6 +743,14 @@ class AgentLightningTrainer:
             print(f"🧠 RL TRAINING ACTIVE: Step {training_result['training_steps']}, Loss={training_result['value_loss']:.4f}")
         elif training_result.get("status") == "skipped":
             self.logger.debug(f"RL training skipped: {training_result.get('reason', 'unknown')}")
+
+        if self.checkpoint_autosave and self.checkpoint_path:
+            try:
+                checkpoint_result = self.save_checkpoint(self.checkpoint_path)
+                training_result["checkpoint"] = checkpoint_result
+            except Exception as e:
+                self.logger.warning("Failed to save Agent Lightning checkpoint: %s", e)
+                training_result["checkpoint_error"] = str(e)
         
         # Store training result in the overall result
         return training_result
@@ -581,6 +780,31 @@ class AgentLightningTrainer:
             quality_bonus = result["quality_score"] * 0.3
         
         return base_reward - time_penalty + quality_bonus
+
+    def save_checkpoint(
+        self,
+        checkpoint_path: Optional[str] = None,
+        include_replay_buffer: bool = True,
+        max_replay_items: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        path = checkpoint_path or self.checkpoint_path
+        if not path:
+            return {"status": "skipped", "reason": "checkpoint_path_not_set"}
+        return self.rl_algorithm.save_checkpoint(
+            checkpoint_path=path,
+            include_replay_buffer=include_replay_buffer,
+            max_replay_items=max_replay_items,
+        )
+
+    def load_checkpoint(
+        self,
+        checkpoint_path: Optional[str] = None,
+        allow_missing: bool = True,
+    ) -> Dict[str, Any]:
+        path = checkpoint_path or self.checkpoint_path
+        if not path:
+            return {"status": "skipped", "reason": "checkpoint_path_not_set"}
+        return self.rl_algorithm.load_checkpoint(path, allow_missing=allow_missing)
     
     def get_training_stats(self) -> Dict[str, Any]:
         """Get current training statistics."""
@@ -590,7 +814,9 @@ class AgentLightningTrainer:
             "active_sessions": len(self.collector.active_sessions),
             "rl_buffer_size": len(self.rl_algorithm.replay_buffer),
             "rl_training_steps": self.rl_algorithm.training_steps,
-            "training_enabled": self.training_enabled
+            "training_enabled": self.training_enabled,
+            "checkpoint_path": self.checkpoint_path,
+            "checkpoint_autosave": self.checkpoint_autosave,
         }
 
 
@@ -631,11 +857,19 @@ class SpecTestPilotAdapter:
 
 
 # Example usage with existing SpecTestPilot
-def create_agent_lightning_system(gam_memory_system=None):
+def create_agent_lightning_system(
+    gam_memory_system=None,
+    checkpoint_path: Optional[str] = None,
+    checkpoint_autosave: bool = True,
+):
     """Create Agent Lightning system integrated with existing components."""
     
     # Initialize Agent Lightning
-    trainer = AgentLightningTrainer(gam_memory_system=gam_memory_system)
+    trainer = AgentLightningTrainer(
+        gam_memory_system=gam_memory_system,
+        checkpoint_path=checkpoint_path,
+        checkpoint_autosave=checkpoint_autosave,
+    )
     
     # Create adapter for existing SpecTestPilot
     adapter = SpecTestPilotAdapter()
@@ -649,7 +883,9 @@ def create_agent_lightning_system(gam_memory_system=None):
 # Main training function for integration
 async def train_with_agent_lightning(
     task_data: Dict[str, Any],
-    gam_memory_system=None
+    gam_memory_system=None,
+    checkpoint_path: Optional[str] = None,
+    checkpoint_autosave: bool = True,
 ) -> Dict[str, Any]:
     """
     Train SpecTestPilot using Agent Lightning with zero code changes.
@@ -659,7 +895,11 @@ async def train_with_agent_lightning(
     """
     
     # Create system
-    trainer = create_agent_lightning_system(gam_memory_system)
+    trainer = create_agent_lightning_system(
+        gam_memory_system,
+        checkpoint_path=checkpoint_path,
+        checkpoint_autosave=checkpoint_autosave,
+    )
     
     # Train agent
     result = await trainer.train_agent("spec_test_pilot", task_data)

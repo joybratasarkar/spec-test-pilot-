@@ -98,6 +98,7 @@ class QASpecialistAgent:
         output_dir: Optional[str] = None,
         max_scenarios: int = 200,
         pass_threshold: float = 0.70,
+        rl_checkpoint_path: Optional[str] = None,
     ):
         self.spec_path = str(spec_path)
         self.nlp_prompt = nlp_prompt
@@ -114,7 +115,14 @@ class QASpecialistAgent:
             self.output_dir.mkdir(parents=True, exist_ok=True)
 
         self.gam = GAMMemorySystem(use_vector_search=False)
-        self.rl_trainer = LightningTrainerV2(gam_memory_system=self.gam)
+        self.rl_checkpoint_path = str(
+            Path(rl_checkpoint_path).expanduser().resolve()
+        ) if rl_checkpoint_path else str((self.output_dir / "agent_lightning_checkpoint.pt").resolve())
+        self.rl_trainer = LightningTrainerV2(
+            gam_memory_system=self.gam,
+            checkpoint_path=self.rl_checkpoint_path,
+            checkpoint_autosave=True,
+        )
         self.rl_trainer.register_agent("qa_specialist", self._qa_agent_feedback)
         self.learning_state_path = self.output_dir / "learning_state.json"
         self.learning_state = self._load_learning_state()
@@ -250,6 +258,7 @@ class QASpecialistAgent:
                 "feedback": learning_feedback,
                 "state_snapshot": self._learning_state_snapshot(),
                 "state_file": str(self.learning_state_path),
+                "agent_lightning_checkpoint": self.rl_checkpoint_path,
             },
             "selection_policy": {
                 "algorithm": "contextual_linear_ucb",
@@ -1067,6 +1076,7 @@ class QASpecialistAgent:
                 f"- Penalized Decisions: `{feedback.get('penalized_decisions', 0)}`",
                 f"- Learning Run Count: `{state_snapshot.get('run_count', 0)}`",
                 f"- Learning State File: `{learning.get('state_file', '')}`",
+                f"- RL Checkpoint File: `{learning.get('agent_lightning_checkpoint', '')}`",
             ]
         )
 
@@ -1172,7 +1182,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output-dir",
         default=None,
-        help="Directory for generated tests and reports (default: temp dir)",
+        help="Directory for generated tests/reports (default: .qa_specialist_workspace)",
     )
     parser.add_argument(
         "--max-scenarios",
@@ -1185,6 +1195,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.70,
         help="Minimum pass-rate required for quality gate",
+    )
+    parser.add_argument(
+        "--rl-checkpoint",
+        default=None,
+        help="Path to Agent Lightning checkpoint file (default: <output-dir>/agent_lightning_checkpoint.pt)",
     )
     return parser
 
@@ -1201,6 +1216,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         output_dir=args.output_dir,
         max_scenarios=args.max_scenarios,
         pass_threshold=args.pass_threshold,
+        rl_checkpoint_path=args.rl_checkpoint,
     )
 
     report = agent.run()
