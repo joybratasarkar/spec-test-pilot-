@@ -627,6 +627,14 @@ class AgentLightningTrainer:
                 result = agent_function(task_data)
             
             execution_time = time.time() - start_time
+
+            decision_signals = task_data.get("decision_signals", [])
+            if isinstance(decision_signals, list) and decision_signals:
+                self._collect_decision_signal_traces(
+                    session_id=session_id,
+                    agent_id=agent_id,
+                    decision_signals=decision_signals,
+                )
             
             # Collect post-execution trace
             self.collector.collect_trace(
@@ -692,6 +700,39 @@ class AgentLightningTrainer:
         finally:
             # End observability session
             traces = self.collector.end_session(session_id)
+
+    def _collect_decision_signal_traces(
+        self,
+        session_id: str,
+        agent_id: str,
+        decision_signals: List[Dict[str, Any]],
+    ) -> None:
+        """Attach per-scenario decision traces so RL gets dense training feedback."""
+        for idx, signal in enumerate(decision_signals):
+            if not isinstance(signal, dict):
+                continue
+
+            reward_signal = float(signal.get("reward", 0.0))
+            self.collector.collect_trace(
+                session_id,
+                agent_id,
+                "action",
+                {
+                    "type": "scenario_decision",
+                    "index": idx,
+                    "name": str(signal.get("name", f"scenario_{idx}")),
+                    "test_type": str(signal.get("test_type", "unknown")),
+                    "method": str(signal.get("method", "GET")).upper(),
+                    "endpoint_template": str(signal.get("endpoint_template", "")),
+                    "endpoint_key": str(signal.get("endpoint_key", "")),
+                    "has_body": bool(signal.get("has_body", False)),
+                    "has_params": bool(signal.get("has_params", False)),
+                    "expected_status": int(signal.get("expected_status", 0)),
+                    "actual_status": signal.get("actual_status"),
+                    "passed": bool(signal.get("passed", False)),
+                    "reward_signal": reward_signal,
+                },
+            )
     
     async def _process_training_data(
         self, 
@@ -721,10 +762,16 @@ class AgentLightningTrainer:
             
             # Only create transitions for action traces
             if current_trace.trace_type == "action":
+                transition_reward = rewards[i]
+                if current_trace.content.get("type") == "scenario_decision":
+                    transition_reward = float(
+                        current_trace.content.get("reward_signal", transition_reward)
+                    )
+
                 transition = TrainingTransition(
                     state=current_trace.content,
                     action={"type": current_trace.trace_type, "content": current_trace.content},
-                    reward=rewards[i],
+                    reward=transition_reward,
                     next_state=next_trace.content,
                     done=(i == len(traces) - 2),
                     trace_sequence=traces[i:i+2],

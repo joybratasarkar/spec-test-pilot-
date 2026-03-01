@@ -56,6 +56,10 @@ python test_complete_system.py
 
 This section reflects the current implementation in `spec_test_pilot/qa_specialist_agent.py`.
 
+Detailed glass-box learning/data-flow guide:
+
+1. `LEARNING_DATA_FLOW_QA_AGENT.md`
+
 ```mermaid
 flowchart TD
     A[Input: spec_path tenant_id prompt thresholds] --> B[Parse OpenAPI Spec]

@@ -42,6 +42,13 @@ from spec_test_pilot.multi_language_tester import (
 
 PATH_PARAM_PATTERN = re.compile(r"\{([^}]+)\}")
 NEGATIVE_STATUS_CODES = {400, 401, 403, 404, 405, 409, 422}
+AUTH_NEGATIVE_STATUS_CODES = {401, 403}
+HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
+UNCERTAINTY_COVERAGE_QUANTILE = 0.75
+REPAIR_RULE_MIN_ATTEMPTS = 3
+REPAIR_RULE_MIN_FAILURE_RATE = 0.85
+REPAIR_RULE_DOMINANT_RATIO = 0.70
+REPAIR_RULE_MAX_ITEMS = 500
 DEFAULT_DECISION_WEIGHT = 1.0
 MIN_DECISION_WEIGHT = 0.2
 MAX_DECISION_WEIGHT = 5.0
@@ -133,11 +140,14 @@ class QASpecialistAgent:
         self.learning_state["adaptive_policy"] = self.adaptive_policy.to_state()
         self.learning_state["scenario_stats"] = dict(self.adaptive_policy.scenario_stats)
         self._last_selection_trace: List[Dict[str, Any]] = []
+        self._last_selection_summary: Dict[str, Any] = {}
+        self._auth_required_ops: set[str] = set()
 
     def run(self) -> Dict[str, Any]:
         """Run the full QA specialist workflow."""
         started_at = time.time()
         spec = self._load_spec()
+        self._auth_required_ops = self._build_auth_requirement_map(spec)
         spec_title = spec.get("info", {}).get("title", "Unknown API")
         spec_version = spec.get("info", {}).get("version", "unknown")
 
@@ -195,6 +205,7 @@ class QASpecialistAgent:
         )
         all_scenarios = simulator.think_like_tester(effective_prompt)
         scenarios = self._select_scenarios_with_learning(all_scenarios)
+        scenarios, repair_summary = self._apply_scenario_repairs(spec, scenarios)
 
         generated_files = self._generate_test_files(scenarios)
         execution_results = self._execute_in_isolated_mock(spec, scenarios)
@@ -241,6 +252,7 @@ class QASpecialistAgent:
             spec_title=spec_title,
             summary=summary,
             report_path=str(rl_report_path),
+            learning_feedback=learning_feedback,
         )
 
         report = {
@@ -264,8 +276,37 @@ class QASpecialistAgent:
                 "algorithm": "contextual_linear_ucb",
                 "candidate_count": len(all_scenarios),
                 "selected_count": len(scenarios),
+                "base_max_scenarios": int(
+                    self._last_selection_summary.get("base_max_scenarios", self.max_scenarios)
+                ),
+                "effective_budget": int(
+                    self._last_selection_summary.get("effective_budget", len(scenarios))
+                ),
+                "budget_expanded_for_uncertainty": bool(
+                    self._last_selection_summary.get(
+                        "budget_expanded_for_uncertainty",
+                        False,
+                    )
+                ),
+                "uncertainty_quantile": float(
+                    self._last_selection_summary.get(
+                        "uncertainty_quantile",
+                        UNCERTAINTY_COVERAGE_QUANTILE,
+                    )
+                ),
+                "uncertainty_threshold": round(
+                    float(self._last_selection_summary.get("uncertainty_threshold", 0.0)),
+                    6,
+                ),
+                "uncertain_candidate_count": int(
+                    self._last_selection_summary.get("uncertain_candidate_count", 0)
+                ),
+                "uncertain_selected_count": int(
+                    self._last_selection_summary.get("uncertain_selected_count", 0)
+                ),
                 "top_decisions": self._last_selection_trace[:20],
             },
+            "repair_policy": repair_summary,
             "generated_test_files": generated_files,
             "scenario_results": [asdict(r) for r in execution_results],
             "gam": {
@@ -348,6 +389,8 @@ class QASpecialistAgent:
                     data.setdefault("decision_history", [])
                     data.setdefault("scenario_stats", {})
                     data.setdefault("selection_trace", [])
+                    data.setdefault("selection_summary", {})
+                    data.setdefault("scenario_repair_rules", {})
                     data.setdefault("adaptive_policy", {})
                     return data
             except Exception:
@@ -360,6 +403,8 @@ class QASpecialistAgent:
             "decision_history": [],
             "scenario_stats": {},
             "selection_trace": [],
+            "selection_summary": {},
+            "scenario_repair_rules": {},
             "adaptive_policy": {},
         }
 
@@ -368,6 +413,7 @@ class QASpecialistAgent:
         payload["adaptive_policy"] = self.adaptive_policy.to_state()
         payload["scenario_stats"] = dict(self.adaptive_policy.scenario_stats)
         payload["selection_trace"] = list(self._last_selection_trace[:SELECTION_TRACE_LIMIT])
+        payload["selection_summary"] = dict(self._last_selection_summary)
 
         history = payload.get("decision_history", [])
         if len(history) > LEARNING_HISTORY_LIMIT:
@@ -386,6 +432,18 @@ class QASpecialistAgent:
             payload["scenario_stats"] = {k: v for k, v in ranked}
             self.adaptive_policy.scenario_stats = dict(payload["scenario_stats"])
 
+        repair_rules = payload.get("scenario_repair_rules", {})
+        if isinstance(repair_rules, dict) and len(repair_rules) > REPAIR_RULE_MAX_ITEMS:
+            ranked_rules = sorted(
+                repair_rules.items(),
+                key=lambda kv: (
+                    int((kv[1] or {}).get("attempts", 0)),
+                    float((kv[1] or {}).get("failure_rate", 0.0)),
+                ),
+                reverse=True,
+            )[:REPAIR_RULE_MAX_ITEMS]
+            payload["scenario_repair_rules"] = {k: v for k, v in ranked_rules}
+
         with open(self.learning_state_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
 
@@ -393,6 +451,7 @@ class QASpecialistAgent:
         type_weights = self.learning_state.get("test_type_weights", {})
         endpoint_weights = self.learning_state.get("endpoint_weights", {})
         scenario_stats = self.adaptive_policy.scenario_stats
+        repair_rules = self.learning_state.get("scenario_repair_rules", {})
         top_types = sorted(type_weights.items(), key=lambda x: x[1], reverse=True)[:8]
         top_endpoints = sorted(endpoint_weights.items(), key=lambda x: x[1], reverse=True)[:8]
         weakest_patterns = sorted(
@@ -411,6 +470,7 @@ class QASpecialistAgent:
             "decision_history_size": len(self.learning_state.get("decision_history", [])),
             "policy_feature_dim": self.adaptive_policy.feature_dim,
             "scenario_patterns_tracked": len(scenario_stats),
+            "active_repair_rules": len(repair_rules) if isinstance(repair_rules, dict) else 0,
             "weakest_patterns": [
                 {
                     "fingerprint": fp,
@@ -425,6 +485,7 @@ class QASpecialistAgent:
     def _select_scenarios_with_learning(self, scenarios: List[TestScenario]) -> List[TestScenario]:
         if not scenarios:
             self._last_selection_trace = []
+            self._last_selection_summary = {}
             return []
 
         type_weights = self.learning_state.get("test_type_weights", {})
@@ -476,8 +537,65 @@ class QASpecialistAgent:
         selection_trace: List[Dict[str, Any]] = []
         endpoint_counter: Counter[str] = Counter()
         type_counter: Counter[str] = Counter()
+        selected_fingerprints: set[str] = set()
 
-        while candidates and len(selected) < self.max_scenarios:
+        uncertainty_values = [
+            float(item["score_parts"].get("uncertainty", 0.0)) for item in candidates
+        ]
+        uncertainty_threshold = self._compute_uncertainty_threshold(uncertainty_values)
+        uncertain_candidates = [
+            item
+            for item in candidates
+            if float(item["score_parts"].get("uncertainty", 0.0)) >= uncertainty_threshold
+            and float(item["score_parts"].get("uncertainty", 0.0)) > 0.0
+        ]
+        effective_budget = max(self.max_scenarios, len(uncertain_candidates))
+        budget_expanded = effective_budget > self.max_scenarios
+
+        if uncertain_candidates:
+            uncertain_sorted = sorted(
+                uncertain_candidates,
+                key=lambda item: (
+                    float(item["score_parts"].get("uncertainty", 0.0)),
+                    float(item["score_parts"].get("score", 0.0)),
+                ),
+                reverse=True,
+            )
+            for chosen in uncertain_sorted:
+                fp = chosen["fingerprint"]
+                if fp in selected_fingerprints:
+                    continue
+                scenario = chosen["scenario"]
+                selected.append(scenario)
+                selected_fingerprints.add(fp)
+                endpoint_counter[chosen["endpoint_key"]] += 1
+                type_counter[chosen["type_key"]] += 1
+                if len(selection_trace) < SELECTION_TRACE_LIMIT:
+                    parts = chosen["score_parts"]
+                    selection_trace.append(
+                        {
+                            "name": scenario.name,
+                            "test_type": chosen["type_key"],
+                            "endpoint": chosen["endpoint_key"],
+                            "fingerprint": fp,
+                            "selection_reason": "uncertainty_coverage",
+                            "score": round(float(parts["score"]), 4),
+                            "expected_reward": round(float(parts["expected_reward"]), 4),
+                            "uncertainty": round(float(parts["uncertainty"]), 4),
+                            "exploration_bonus": round(float(parts["exploration_bonus"]), 4),
+                            "failure_focus_bonus": round(float(parts["failure_focus_bonus"]), 4),
+                            "historical_reward": round(float(parts["historical_reward"]), 4),
+                            "novelty_bonus": round(float(chosen["novelty_bonus"]), 4),
+                            "diversity_penalty": 0.0,
+                        }
+                    )
+
+        if selected_fingerprints:
+            candidates = [
+                item for item in candidates if item["fingerprint"] not in selected_fingerprints
+            ]
+
+        while candidates and len(selected) < effective_budget:
             best_idx = 0
             best_score = -float("inf")
             best_diversity_penalty = 0.0
@@ -495,6 +613,7 @@ class QASpecialistAgent:
             chosen = candidates.pop(best_idx)
             scenario = chosen["scenario"]
             selected.append(scenario)
+            selected_fingerprints.add(chosen["fingerprint"])
             endpoint_counter[chosen["endpoint_key"]] += 1
             type_counter[chosen["type_key"]] += 1
 
@@ -506,6 +625,7 @@ class QASpecialistAgent:
                         "test_type": chosen["type_key"],
                         "endpoint": chosen["endpoint_key"],
                         "fingerprint": chosen["fingerprint"],
+                        "selection_reason": "score_ranked",
                         "score": round(best_score, 4),
                         "expected_reward": round(float(parts["expected_reward"]), 4),
                         "uncertainty": round(float(parts["uncertainty"]), 4),
@@ -518,8 +638,43 @@ class QASpecialistAgent:
                 )
 
         self._last_selection_trace = selection_trace
+        self._last_selection_summary = {
+            "base_max_scenarios": int(self.max_scenarios),
+            "effective_budget": int(effective_budget),
+            "budget_expanded_for_uncertainty": bool(budget_expanded),
+            "uncertainty_quantile": float(UNCERTAINTY_COVERAGE_QUANTILE),
+            "uncertainty_threshold": float(uncertainty_threshold),
+            "uncertain_candidate_count": int(len(uncertain_candidates)),
+            "uncertain_selected_count": int(
+                sum(
+                    1
+                    for item in selection_trace
+                    if item.get("selection_reason") == "uncertainty_coverage"
+                )
+            ),
+        }
         self.learning_state["selection_trace"] = list(selection_trace)
+        self.learning_state["selection_summary"] = dict(self._last_selection_summary)
         return selected
+
+    def _compute_uncertainty_threshold(self, values: List[float]) -> float:
+        if not values:
+            return 0.0
+        ordered = sorted(float(v) for v in values)
+        if len(ordered) == 1:
+            return max(0.0, ordered[0])
+
+        position = UNCERTAINTY_COVERAGE_QUANTILE * (len(ordered) - 1)
+        lower = int(math.floor(position))
+        upper = int(math.ceil(position))
+        if lower == upper:
+            return max(0.0, ordered[lower])
+
+        low_val = ordered[lower]
+        high_val = ordered[upper]
+        fraction = position - lower
+        threshold = low_val + fraction * (high_val - low_val)
+        return max(0.0, float(threshold))
 
     def _predict_rl_state_risk(self, scenario: TestScenario) -> float:
         rl_algo = self.rl_trainer.rl_algorithm
@@ -675,7 +830,10 @@ class QASpecialistAgent:
                     "avg_reward": 0.0,
                     "failure_rate": 0.0,
                     "test_type": test_type,
+                    "method": method,
                     "endpoint": endpoint_template,
+                    "expected_status": expected_status,
+                    "actual_status_counts": {},
                 },
             )
             attempts = int(stats.get("attempts", 0)) + 1
@@ -690,7 +848,12 @@ class QASpecialistAgent:
             stats["avg_reward"] = round(new_avg, 6)
             stats["failure_rate"] = round(failures / max(1, attempts), 6)
             stats["test_type"] = test_type
+            stats["method"] = method
             stats["endpoint"] = endpoint_template
+            stats["expected_status"] = expected_status
+            actual_key = str(signal.get("actual_status"))
+            actual_counts = stats.setdefault("actual_status_counts", {})
+            actual_counts[actual_key] = int(actual_counts.get(actual_key, 0)) + 1
 
             self.adaptive_policy.observe(
                 test_type=test_type,
@@ -728,8 +891,301 @@ class QASpecialistAgent:
             )[:SCENARIO_STATS_LIMIT]
             self.learning_state["scenario_stats"] = {k: v for k, v in ranked}
 
+        self._refresh_scenario_repair_rules()
         self.adaptive_policy.scenario_stats = dict(self.learning_state["scenario_stats"])
         self.learning_state["adaptive_policy"] = self.adaptive_policy.to_state()
+
+    def _refresh_scenario_repair_rules(self) -> None:
+        scenario_stats = self.learning_state.get("scenario_stats", {})
+        if not isinstance(scenario_stats, dict):
+            self.learning_state["scenario_repair_rules"] = {}
+            return
+
+        rules: Dict[str, Dict[str, Any]] = {}
+        for fingerprint, stats_raw in scenario_stats.items():
+            if not isinstance(stats_raw, dict):
+                continue
+
+            attempts = int(stats_raw.get("attempts", 0))
+            failure_rate = float(stats_raw.get("failure_rate", 0.0))
+            if attempts < REPAIR_RULE_MIN_ATTEMPTS:
+                continue
+            if failure_rate < REPAIR_RULE_MIN_FAILURE_RATE:
+                continue
+
+            dominant_status, dominant_count = self._dominant_actual_status(
+                stats_raw.get("actual_status_counts", {})
+            )
+            if dominant_status is None or dominant_count <= 0:
+                continue
+
+            observed_total = self._observed_status_total(
+                stats_raw.get("actual_status_counts", {})
+            )
+            if observed_total < REPAIR_RULE_MIN_ATTEMPTS:
+                continue
+            dominant_ratio = float(dominant_count) / max(1, observed_total)
+            if dominant_ratio < REPAIR_RULE_DOMINANT_RATIO:
+                continue
+
+            expected_status = int(
+                stats_raw.get(
+                    "expected_status",
+                    self._expected_status_from_fingerprint(str(fingerprint)),
+                )
+            )
+            method = str(
+                stats_raw.get("method", self._method_from_fingerprint(str(fingerprint)))
+            ).upper()
+
+            rule: Dict[str, Any] = {
+                "fingerprint": str(fingerprint),
+                "method": method,
+                "endpoint": str(stats_raw.get("endpoint", "")),
+                "test_type": str(stats_raw.get("test_type", "unknown")),
+                "attempts": attempts,
+                "status_observations": int(observed_total),
+                "failure_rate": round(failure_rate, 6),
+                "dominant_actual_status": int(dominant_status),
+                "dominant_ratio": round(dominant_ratio, 6),
+            }
+
+            write_success_needs_body_repair = (
+                method in {"POST", "PUT", "PATCH"}
+                and expected_status in {200, 201, 202, 204}
+                and dominant_status == 400
+            )
+            if write_success_needs_body_repair:
+                rule["repair_request_body"] = True
+            elif dominant_status != expected_status:
+                rule["override_expected_status"] = int(dominant_status)
+
+            if "override_expected_status" in rule or rule.get("repair_request_body"):
+                rules[str(fingerprint)] = rule
+
+        if len(rules) > REPAIR_RULE_MAX_ITEMS:
+            ranked = sorted(
+                rules.items(),
+                key=lambda kv: (
+                    int((kv[1] or {}).get("attempts", 0)),
+                    float((kv[1] or {}).get("failure_rate", 0.0)),
+                ),
+                reverse=True,
+            )[:REPAIR_RULE_MAX_ITEMS]
+            rules = {k: v for k, v in ranked}
+
+        self.learning_state["scenario_repair_rules"] = rules
+
+    def _observed_status_total(self, counts_raw: Any) -> int:
+        if not isinstance(counts_raw, dict):
+            return 0
+
+        total = 0
+        for status_key, count_raw in counts_raw.items():
+            try:
+                status = int(status_key)
+                count = int(count_raw)
+            except Exception:
+                continue
+            if status < 100 or status > 599:
+                continue
+            if count > 0:
+                total += count
+        return total
+
+    def _dominant_actual_status(self, counts_raw: Any) -> tuple[Optional[int], int]:
+        if not isinstance(counts_raw, dict):
+            return None, 0
+
+        best_status: Optional[int] = None
+        best_count = 0
+        for status_key, count_raw in counts_raw.items():
+            try:
+                status = int(status_key)
+                count = int(count_raw)
+            except Exception:
+                continue
+            if status < 100 or status > 599:
+                continue
+            if count > best_count:
+                best_status = status
+                best_count = count
+        return best_status, best_count
+
+    def _expected_status_from_fingerprint(self, fingerprint: str) -> int:
+        parts = str(fingerprint).split("|")
+        if len(parts) < 4:
+            return 0
+        try:
+            return int(parts[3])
+        except Exception:
+            return 0
+
+    def _method_from_fingerprint(self, fingerprint: str) -> str:
+        parts = str(fingerprint).split("|")
+        if not parts:
+            return "GET"
+        return str(parts[0]).upper()
+
+    def _apply_scenario_repairs(
+        self, spec: Dict[str, Any], scenarios: List[TestScenario]
+    ) -> tuple[List[TestScenario], Dict[str, Any]]:
+        rules = self.learning_state.get("scenario_repair_rules", {})
+        operation_index = self._build_operation_index(spec)
+
+        applied_examples: List[Dict[str, Any]] = []
+        status_override_count = 0
+        body_repair_count = 0
+
+        for scenario in scenarios:
+            fingerprint = self._scenario_fingerprint(scenario)
+            rule = rules.get(fingerprint, {}) if isinstance(rules, dict) else {}
+            if not isinstance(rule, dict) or not rule:
+                continue
+
+            changes: List[str] = []
+            operation_key = self._operation_key(scenario.method, scenario.endpoint)
+            op_meta = operation_index.get(operation_key, {})
+
+            if bool(rule.get("repair_request_body")):
+                added_fields = self._repair_scenario_body_from_spec(scenario, op_meta)
+                if added_fields > 0:
+                    body_repair_count += 1
+                    changes.append(f"added_required_fields={added_fields}")
+
+            override_status = rule.get("override_expected_status")
+            if override_status is not None:
+                try:
+                    new_expected = int(override_status)
+                    if int(scenario.expected_status) != new_expected:
+                        scenario.expected_status = new_expected
+                        status_override_count += 1
+                        changes.append(f"expected_status->{new_expected}")
+                except Exception:
+                    pass
+
+            if changes and len(applied_examples) < 15:
+                applied_examples.append(
+                    {
+                        "scenario": scenario.name,
+                        "fingerprint": fingerprint,
+                        "changes": changes,
+                    }
+                )
+
+        summary = {
+            "active_rules": len(rules) if isinstance(rules, dict) else 0,
+            "applied_repairs": status_override_count + body_repair_count,
+            "status_overrides": status_override_count,
+            "request_body_repairs": body_repair_count,
+            "applied_examples": applied_examples,
+        }
+        return scenarios, summary
+
+    def _build_operation_index(self, spec: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        index: Dict[str, Dict[str, Any]] = {}
+        for path, path_info in (spec.get("paths") or {}).items():
+            if not isinstance(path_info, dict):
+                continue
+            for method, operation_raw in path_info.items():
+                if str(method).lower() not in HTTP_METHODS:
+                    continue
+                operation = operation_raw if isinstance(operation_raw, dict) else {}
+                request_schema = self._extract_request_schema(operation)
+                required_fields: List[str] = []
+                if isinstance(request_schema, dict):
+                    required_raw = request_schema.get("required", [])
+                    if isinstance(required_raw, list):
+                        required_fields = [str(item) for item in required_raw]
+
+                response_statuses: List[int] = []
+                responses = operation.get("responses", {})
+                if isinstance(responses, dict):
+                    for code in responses.keys():
+                        code_text = str(code)
+                        if code_text.isdigit():
+                            response_statuses.append(int(code_text))
+
+                index[self._operation_key(str(method).upper(), path)] = {
+                    "request_schema": request_schema,
+                    "required_fields": required_fields,
+                    "response_statuses": response_statuses,
+                }
+        return index
+
+    def _extract_request_schema(self, operation: Dict[str, Any]) -> Dict[str, Any]:
+        request_body = operation.get("requestBody", {})
+        if not isinstance(request_body, dict):
+            return {}
+        content = request_body.get("content", {})
+        if not isinstance(content, dict):
+            return {}
+        json_schema = (content.get("application/json") or {}).get("schema", {})
+        if isinstance(json_schema, dict):
+            return json_schema
+        return {}
+
+    def _repair_scenario_body_from_spec(
+        self, scenario: TestScenario, op_meta: Dict[str, Any]
+    ) -> int:
+        required_fields = op_meta.get("required_fields", [])
+        request_schema = op_meta.get("request_schema", {})
+        if not isinstance(required_fields, list) or not required_fields:
+            return 0
+        if not isinstance(request_schema, dict):
+            return 0
+
+        properties = request_schema.get("properties", {})
+        if not isinstance(properties, dict):
+            properties = {}
+
+        body = dict(scenario.body or {})
+        added = 0
+        for field in required_fields:
+            key = str(field)
+            if key in body and body[key] not in (None, ""):
+                continue
+            field_schema = properties.get(key, {}) if isinstance(properties, dict) else {}
+            body[key] = self._sample_value_for_schema(key, field_schema)
+            added += 1
+
+        if added > 0:
+            scenario.body = body
+        return added
+
+    def _sample_value_for_schema(self, field_name: str, field_schema: Any) -> Any:
+        schema = field_schema if isinstance(field_schema, dict) else {}
+        enum_values = schema.get("enum", [])
+        if isinstance(enum_values, list) and enum_values:
+            return enum_values[0]
+
+        field_type = str(schema.get("type", "string")).lower()
+        field_lower = str(field_name).lower()
+
+        if field_type == "integer":
+            if "quantity" in field_lower:
+                return 1
+            return 123
+        if field_type == "number":
+            if "price" in field_lower or "amount" in field_lower:
+                return 1.0
+            return 0.5
+        if field_type == "boolean":
+            return True
+        if field_type == "array":
+            items = schema.get("items", {})
+            return [self._sample_value_for_schema(field_name + "_item", items)]
+        if field_type == "object":
+            return {}
+
+        format_type = str(schema.get("format", "")).lower()
+        if format_type == "email":
+            return "qa@example.com"
+        if "id" in field_lower:
+            return "123"
+        if "name" in field_lower:
+            return "sample_name"
+        return "sample_value"
 
     def _clamp_weight(self, value: float) -> float:
         return max(MIN_DECISION_WEIGHT, min(MAX_DECISION_WEIGHT, float(value)))
@@ -789,6 +1245,7 @@ class QASpecialistAgent:
             scenario.endpoint, scenario.params, scenario.expected_status
         )
         headers = self._render_headers(scenario.headers)
+        headers = self._normalize_auth_headers_for_execution(scenario, method, headers)
         query_params = self._strip_path_params(scenario.endpoint, scenario.params)
         body = scenario.body if method in {"POST", "PUT", "PATCH"} else None
 
@@ -803,7 +1260,7 @@ class QASpecialistAgent:
             )
             duration_ms = (time.perf_counter() - started) * 1000.0
             actual_status = int(response.status_code)
-            passed = actual_status == int(scenario.expected_status)
+            passed = self._status_matches_expectation(scenario, actual_status)
             response_excerpt = self._response_excerpt(response)
 
             return ScenarioExecutionResult(
@@ -864,6 +1321,53 @@ class QASpecialistAgent:
             value = value.replace("{{admin_token}}", "admin_token_123")
             rendered[k] = value
         return rendered
+
+    def _normalize_auth_headers_for_execution(
+        self, scenario: TestScenario, method: str, headers: Dict[str, str]
+    ) -> Dict[str, str]:
+        normalized = dict(headers or {})
+        operation_key = self._operation_key(method, scenario.endpoint)
+        if operation_key not in self._auth_required_ops:
+            return normalized
+
+        if self._is_auth_negative_scenario(scenario):
+            auth_value = self._read_authorization_header(normalized)
+            if auth_value and auth_value.lower().startswith("bearer "):
+                token = auth_value.split(" ", 1)[1].strip()
+                if any(marker in token.lower() for marker in ("invalid", "expired")):
+                    normalized["Authorization"] = "Bearer invalid"
+                    normalized.pop("authorization", None)
+            return normalized
+
+        if not self._has_authorization_header(normalized):
+            normalized["Authorization"] = "Bearer valid_token_123"
+            normalized.pop("authorization", None)
+        return normalized
+
+    def _has_authorization_header(self, headers: Dict[str, str]) -> bool:
+        return bool(self._read_authorization_header(headers))
+
+    def _read_authorization_header(self, headers: Dict[str, str]) -> str:
+        for key, value in (headers or {}).items():
+            if str(key).lower() == "authorization" and str(value).strip():
+                return str(value)
+        return ""
+
+    def _status_matches_expectation(
+        self, scenario: TestScenario, actual_status: int
+    ) -> bool:
+        expected_status = int(scenario.expected_status)
+        if actual_status == expected_status:
+            return True
+
+        scenario_type = str(getattr(scenario.test_type, "value", scenario.test_type)).lower()
+        if (
+            scenario_type in {"authentication", "authorization"}
+            and expected_status in AUTH_NEGATIVE_STATUS_CODES
+            and actual_status in AUTH_NEGATIVE_STATUS_CODES
+        ):
+            return True
+        return False
 
     def _response_excerpt(self, response) -> str:
         try:
@@ -979,13 +1483,74 @@ class QASpecialistAgent:
                 return "oauth2"
         return "unknown"
 
+    def _build_auth_requirement_map(self, spec: Dict[str, Any]) -> set[str]:
+        auth_required_ops: set[str] = set()
+        global_security = spec.get("security", [])
+
+        for path, path_info in (spec.get("paths") or {}).items():
+            if not isinstance(path_info, dict):
+                continue
+            for method, operation in path_info.items():
+                if str(method).lower() not in HTTP_METHODS:
+                    continue
+                operation_payload = operation if isinstance(operation, dict) else {}
+                op_security = (
+                    operation_payload.get("security")
+                    if "security" in operation_payload
+                    else global_security
+                )
+                if self._operation_requires_auth(op_security):
+                    auth_required_ops.add(self._operation_key(str(method).upper(), path))
+        return auth_required_ops
+
+    def _operation_requires_auth(self, security_requirement: Any) -> bool:
+        if security_requirement is None:
+            return False
+        if isinstance(security_requirement, list):
+            return len(security_requirement) > 0
+        return bool(security_requirement)
+
+    def _operation_key(self, method: str, path: str) -> str:
+        return f"{str(method).upper()} {path}"
+
+    def _is_auth_negative_scenario(self, scenario: TestScenario) -> bool:
+        scenario_type = str(getattr(scenario.test_type, "value", scenario.test_type)).lower()
+        if scenario_type in {"authentication", "authorization"}:
+            return True
+
+        try:
+            expected_status = int(scenario.expected_status)
+        except Exception:
+            expected_status = 0
+
+        if expected_status not in AUTH_NEGATIVE_STATUS_CODES:
+            return False
+
+        scenario_text = f"{scenario.name} {scenario.description}".lower()
+        auth_markers = (
+            "auth",
+            "token",
+            "unauthorized",
+            "forbidden",
+            "permission",
+            "access",
+        )
+        return any(marker in scenario_text for marker in auth_markers)
+
     def _run_agent_lightning_training(
-        self, spec_title: str, summary: Dict[str, Any], report_path: str
+        self,
+        spec_title: str,
+        summary: Dict[str, Any],
+        report_path: str,
+        learning_feedback: Dict[str, Any],
     ) -> Dict[str, Any]:
         latest_history = self.learning_state.get("decision_history", [])
-        latest_run_reward = 0.0
+        latest_run_reward = float(learning_feedback.get("run_reward", 0.0))
         if latest_history:
-            latest_run_reward = float(latest_history[-1].get("run_reward", 0.0))
+            latest_run_reward = max(
+                latest_run_reward,
+                float(latest_history[-1].get("run_reward", 0.0)),
+            )
 
         task_payload = {
             "spec_title": spec_title,
@@ -997,6 +1562,7 @@ class QASpecialistAgent:
             "report_path": report_path,
             "summary": summary,
             "learning_reward_score": latest_run_reward,
+            "decision_signals": learning_feedback.get("decision_signals", []),
         }
 
         training_result = self._run_async(
@@ -1038,6 +1604,7 @@ class QASpecialistAgent:
         feedback = learning.get("feedback", {})
         state_snapshot = learning.get("state_snapshot", {})
         selection_policy = report.get("selection_policy", {})
+        repair_policy = report.get("repair_policy", {})
 
         lines = [
             "# QA Specialist Execution Report",
@@ -1087,8 +1654,16 @@ class QASpecialistAgent:
                 f"- Algorithm: `{selection_policy.get('algorithm', 'n/a')}`",
                 f"- Candidate Scenarios: `{selection_policy.get('candidate_count', 0)}`",
                 f"- Selected Scenarios: `{selection_policy.get('selected_count', 0)}`",
+                f"- Base Max Scenarios: `{selection_policy.get('base_max_scenarios', 0)}`",
+                f"- Effective Budget: `{selection_policy.get('effective_budget', 0)}`",
+                "- Expanded For Uncertainty: "
+                + f"`{selection_policy.get('budget_expanded_for_uncertainty', False)}`",
+                f"- Uncertain Candidates: `{selection_policy.get('uncertain_candidate_count', 0)}`",
+                f"- Uncertain Selected: `{selection_policy.get('uncertain_selected_count', 0)}`",
+                f"- Uncertainty Threshold: `{selection_policy.get('uncertainty_threshold', 0)}`",
                 f"- Policy Feature Dim: `{state_snapshot.get('policy_feature_dim', 0)}`",
                 f"- Scenario Patterns Tracked: `{state_snapshot.get('scenario_patterns_tracked', 0)}`",
+                f"- Active Repair Rules: `{state_snapshot.get('active_repair_rules', 0)}`",
             ]
         )
 
@@ -1101,6 +1676,17 @@ class QASpecialistAgent:
                     + f"uncertainty={decision.get('uncertainty', 0)} "
                     + f"failure_focus={decision.get('failure_focus_bonus', 0)}"
                 )
+
+        lines.extend(
+            [
+                "",
+                "## Learned Repairs",
+                f"- Active Rules: `{repair_policy.get('active_rules', 0)}`",
+                f"- Applied Repairs: `{repair_policy.get('applied_repairs', 0)}`",
+                f"- Status Overrides: `{repair_policy.get('status_overrides', 0)}`",
+                f"- Request Body Repairs: `{repair_policy.get('request_body_repairs', 0)}`",
+            ]
+        )
 
         lines.extend(
             [

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 
@@ -87,3 +88,67 @@ def test_trainer_auto_loads_checkpoint(tmp_path: Path) -> None:
     assert len(restored.rl_algorithm.replay_buffer) == 1
     stats = restored.get_training_stats()
     assert stats["checkpoint_path"] == str(ckpt)
+
+
+def test_trainer_uses_decision_signals_for_dense_rewards() -> None:
+    if not TORCH_AVAILABLE:
+        pytest.skip("PyTorch unavailable in environment")
+
+    trainer = AgentLightningTrainer(
+        rl_algorithm=LightningRLAlgorithm(state_dim=64, hidden_dim=32, batch_size=4, buffer_size=100),
+        checkpoint_autosave=False,
+    )
+
+    def _agent_feedback(task_data):
+        return {
+            "success": True,
+            "quality_score": float(task_data.get("learning_reward_score", 0.0)),
+        }
+
+    trainer.register_agent("qa_specialist", _agent_feedback)
+
+    payload = {
+        "tenant_id": "qa_demo",
+        "pass_rate": 0.25,
+        "pass_threshold": 0.7,
+        "learning_reward_score": 0.35,
+        "decision_signals": [
+            {
+                "name": "auth_missing",
+                "test_type": "authentication",
+                "method": "GET",
+                "endpoint_template": "/orders/{orderId}",
+                "endpoint_key": "GET /orders/{orderId}",
+                "has_body": False,
+                "has_params": False,
+                "expected_status": 401,
+                "actual_status": 401,
+                "passed": True,
+                "reward": 1.0,
+            },
+            {
+                "name": "invalid_payload",
+                "test_type": "input_validation",
+                "method": "POST",
+                "endpoint_template": "/orders",
+                "endpoint_key": "POST /orders",
+                "has_body": True,
+                "has_params": False,
+                "expected_status": 400,
+                "actual_status": 201,
+                "passed": False,
+                "reward": -0.75,
+            },
+        ],
+    }
+
+    result = asyncio.run(trainer.train_agent("qa_specialist", payload))
+    assert result["success"] is True
+
+    stats = trainer.get_training_stats()
+    # task_start + 2 scenario decisions should all become transitions.
+    assert stats["rl_buffer_size"] >= 3
+
+    rewards = [t.reward for t in trainer.rl_algorithm.replay_buffer]
+    assert any(abs(r - 1.0) < 1e-6 for r in rewards)
+    assert any(abs(r + 0.75) < 1e-6 for r in rewards)
