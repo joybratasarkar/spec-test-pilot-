@@ -1,575 +1,226 @@
 #!/usr/bin/env python3
-"""
-Official Agent Lightning Implementation
-Based on Microsoft Agent Lightning documentation: 
-https://microsoft.github.io/agent-lightning/latest/how-to/train-first-agent/
+"""Official Agent Lightning integration for SpecTestPilot.
 
-Core concepts from the official docs:
-- Tasks: Specific input/problem statements
-- Rollouts: Complete execution traces from task to reward
-- Spans: Individual units of work (LLM calls, tool usage, etc.)
-- Prompt Templates: Reusable instructions that get optimized
-- APO Algorithm: Automatic Prompt Optimization via textual gradients
-- Trainer: Central orchestrator that manages the training loop
+This module intentionally uses the real `agentlightning` package API.
+It does not re-implement the trainer/algorithm loop locally.
 """
 
-import asyncio
-import json
-import time
-import uuid
-from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional, Tuple, Callable, Union
-from enum import Enum
+from __future__ import annotations
+
 import logging
-from collections import defaultdict
-import openai
+import os
+from dataclasses import dataclass
+from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-# Optional ML dependencies for advanced training
-try:
-    import torch
-    import torch.nn as nn
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
+from openai import AsyncOpenAI
 
+from agentlightning import APO, PromptTemplate, Trainer, prompt_rollout
+from agentlightning.adapter.messages import TraceToMessages
 
-@dataclass
-class Task:
-    """
-    A specific input or problem statement given to the agent.
-    From docs: "defines what the agent needs to accomplish"
-    """
-    task_id: str
-    input_data: Dict[str, Any]
-    expected_output: Optional[Any] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+logger = logging.getLogger(__name__)
 
+# Kept for compatibility with previous imports in this repo.
+Task = Dict[str, Any]
 
-@dataclass 
-class Span:
-    """
-    A single unit of work within a rollout.
-    From docs: "building blocks of a trace" with start/end times
-    """
-    span_id: str
-    rollout_id: str
-    operation_type: str  # "llm_call", "tool_use", "reward_calculation"
-    start_time: float
-    end_time: float
-    input_data: Dict[str, Any] = field(default_factory=dict)
-    output_data: Dict[str, Any] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    parent_span_id: Optional[str] = None
+DEFAULT_PROMPT_TEMPLATE = """You are a senior QA test architect.
 
-
-@dataclass
-class Rollout:
-    """
-    A single, complete execution of an agent attempting to solve a task.
-    From docs: "captures a full trace of the agent's execution"
-    """
-    rollout_id: str
-    task: Task
-    spans: List[Span]
-    final_reward: float
-    status: str  # "completed", "failed", "timeout"
-    start_time: float
-    end_time: float
-    agent_output: Any = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class PromptTemplate:
-    """
-    A reusable instruction for the agent with placeholders.
-    From docs: "key resource that the algorithm learns and improves"
-    """
-    template_id: str
-    content: str
-    version: int = 1
-    performance_score: Optional[float] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-
-class APOAlgorithm:
-    """
-    Automatic Prompt Optimization Algorithm
-    From docs: Evaluate → Critique → Rewrite cycle using LLMs
-    """
-    
-    def __init__(self, openai_client: openai.AsyncOpenAI):
-        self.openai_client = openai_client
-        self.logger = logging.getLogger(__name__)
-    
-    async def evaluate_prompt(
-        self, 
-        prompt_template: PromptTemplate,
-        rollouts: List[Rollout]
-    ) -> float:
-        """Step 1: Evaluate current prompt performance."""
-        if not rollouts:
-            return 0.0
-        
-        total_reward = sum(r.final_reward for r in rollouts)
-        avg_reward = total_reward / len(rollouts)
-        
-        self.logger.info(f"Prompt evaluation: {avg_reward:.3f} avg reward from {len(rollouts)} rollouts")
-        return avg_reward
-    
-    async def critique_prompt(
-        self,
-        prompt_template: PromptTemplate,
-        rollouts: List[Rollout]
-    ) -> str:
-        """Step 2: Generate textual gradient critique."""
-        
-        # Analyze rollout patterns
-        failed_rollouts = [r for r in rollouts if r.final_reward < 0.5]
-        successful_rollouts = [r for r in rollouts if r.final_reward >= 0.8]
-        
-        critique_prompt = f"""
-        Analyze this agent prompt and its performance:
-        
-        PROMPT: {prompt_template.content}
-        
-        PERFORMANCE DATA:
-        - Total rollouts: {len(rollouts)}
-        - Failed rollouts: {len(failed_rollouts)}
-        - Successful rollouts: {len(successful_rollouts)}
-        - Average reward: {sum(r.final_reward for r in rollouts) / len(rollouts):.3f}
-        
-        Provide a detailed critique of what's wrong with this prompt and how to improve it.
-        Focus on clarity, specificity, and task guidance.
-        """
-        
-        response = await self.openai_client.chat.completions.create(
-            model="gpt-4",  # Use gpt-4 for critique as per docs
-            messages=[{"role": "user", "content": critique_prompt}],
-            temperature=0.3
-        )
-        
-        critique = response.choices[0].message.content
-        self.logger.info(f"Generated critique: {critique[:100]}...")
-        return critique
-    
-    async def rewrite_prompt(
-        self,
-        original_prompt: PromptTemplate,
-        critique: str
-    ) -> PromptTemplate:
-        """Step 3: Apply critique to generate improved prompt."""
-        
-        rewrite_prompt = f"""
-        You are an expert prompt engineer. Improve this agent prompt based on the critique:
-        
-        ORIGINAL PROMPT:
-        {original_prompt.content}
-        
-        CRITIQUE:
-        {critique}
-        
-        INSTRUCTIONS:
-        1. Keep the core functionality intact
-        2. Address the specific issues mentioned in the critique
-        3. Make the prompt clearer and more specific
-        4. Maintain any placeholders ({{variable}}) that exist
-        
-        Return ONLY the improved prompt, nothing else.
-        """
-        
-        response = await self.openai_client.chat.completions.create(
-            model="gpt-4",  # Use gpt-4 for rewriting
-            messages=[{"role": "user", "content": rewrite_prompt}],
-            temperature=0.5
-        )
-        
-        improved_content = response.choices[0].message.content
-        
-        improved_template = PromptTemplate(
-            template_id=str(uuid.uuid4()),
-            content=improved_content,
-            version=original_prompt.version + 1,
-            metadata={"parent_template": original_prompt.template_id, "critique": critique}
-        )
-        
-        self.logger.info(f"Generated improved prompt v{improved_template.version}")
-        return improved_template
-
-
-class AgentRunner:
-    """
-    Executes agent rollouts and captures spans.
-    Integrates with existing SpecTestPilot agent.
-    """
-    
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
-    
-    async def execute_rollout(
-        self, 
-        agent_function: Callable,
-        task: Task,
-        prompt_template: PromptTemplate
-    ) -> Rollout:
-        """Execute a complete agent rollout with span capture."""
-        
-        rollout_id = str(uuid.uuid4())
-        start_time = time.time()
-        spans = []
-        
-        try:
-            # Create task execution span
-            task_span = Span(
-                span_id=str(uuid.uuid4()),
-                rollout_id=rollout_id,
-                operation_type="task_execution",
-                start_time=start_time,
-                end_time=start_time,  # Will update
-                input_data={
-                    "task": task.input_data,
-                    "prompt_template": prompt_template.content
-                }
-            )
-            
-            # Prepare input with prompt template
-            enhanced_input = task.input_data.copy()
-            enhanced_input['nlp_prompt'] = prompt_template.content.format(**task.input_data)
-            
-            # Execute the agent
-            self.logger.info(f"Executing rollout {rollout_id} for task {task.task_id}")
-            
-            # Import and run existing SpecTestPilot agent
-            from .sandbox import AgentLightningSandbox
-            sandbox = AgentLightningSandbox()
-            
-            agent_start = time.time()
-            result = sandbox.execute_agent_task(enhanced_input)
-            agent_end = time.time()
-            
-            # Update task span
-            task_span.end_time = agent_end
-            task_span.output_data = result
-            spans.append(task_span)
-            
-            # Create agent execution span
-            agent_span = Span(
-                span_id=str(uuid.uuid4()),
-                rollout_id=rollout_id,
-                operation_type="agent_execution",
-                start_time=agent_start,
-                end_time=agent_end,
-                input_data=enhanced_input,
-                output_data=result,
-                parent_span_id=task_span.span_id
-            )
-            spans.append(agent_span)
-            
-            # Calculate reward based on agent performance
-            reward_start = time.time()
-            reward = self._calculate_reward(result, task)
-            reward_end = time.time()
-            
-            # Create reward span
-            reward_span = Span(
-                span_id=str(uuid.uuid4()),
-                rollout_id=rollout_id,
-                operation_type="reward_calculation",
-                start_time=reward_start,
-                end_time=reward_end,
-                input_data={"result": result, "task": task.input_data},
-                output_data={"reward": reward},
-                parent_span_id=task_span.span_id
-            )
-            spans.append(reward_span)
-            
-            end_time = time.time()
-            
-            rollout = Rollout(
-                rollout_id=rollout_id,
-                task=task,
-                spans=spans,
-                final_reward=reward,
-                status="completed",
-                start_time=start_time,
-                end_time=end_time,
-                agent_output=result
-            )
-            
-            self.logger.info(f"Rollout {rollout_id} completed: reward={reward:.3f}, duration={end_time-start_time:.2f}s")
-            return rollout
-            
-        except Exception as e:
-            self.logger.error(f"Rollout {rollout_id} failed: {e}")
-            
-            # Create failure rollout
-            return Rollout(
-                rollout_id=rollout_id,
-                task=task,
-                spans=spans,
-                final_reward=0.0,
-                status="failed",
-                start_time=start_time,
-                end_time=time.time(),
-                metadata={"error": str(e)}
-            )
-    
-    def _calculate_reward(self, result: Dict[str, Any], task: Task) -> float:
-        """Calculate reward based on agent performance."""
-        base_reward = 0.5
-        
-        # Success bonus
-        if result.get("success", False):
-            base_reward += 0.3
-        
-        # Quality bonus
-        if "quality_score" in result:
-            base_reward += result["quality_score"] * 0.2
-        
-        # Efficiency bonus (faster execution = higher reward)
-        processing_time = result.get("processing_time", 2.0)
-        if processing_time < 1.0:
-            base_reward += 0.1
-        
-        return min(1.0, max(0.0, base_reward))
-
-
-class AgentLightningTrainer:
-    """
-    Central orchestrator that manages the training loop.
-    From docs: "connects everything and manages the entire workflow"
-    """
-    
-    def __init__(
-        self,
-        algorithm: APOAlgorithm,
-        n_runners: int = 4,
-        initial_resources: Dict[str, Any] = None
-    ):
-        self.algorithm = algorithm
-        self.n_runners = n_runners
-        self.runners = [AgentRunner() for _ in range(n_runners)]
-        self.current_prompt_template = None
-        self.training_history = []
-        self.logger = logging.getLogger(__name__)
-        
-        # Set initial prompt template
-        if initial_resources and "prompt_template" in initial_resources:
-            self.current_prompt_template = initial_resources["prompt_template"]
-        else:
-            # Default prompt template for SpecTestPilot
-            self.current_prompt_template = PromptTemplate(
-                template_id=str(uuid.uuid4()),
-                content="""You are an expert API testing agent. 
-
-Your task is to {nlp_prompt} for the API specification: {spec_title}
-
-Generate comprehensive, high-quality tests that cover:
-- Security vulnerabilities and edge cases
-- Authentication and authorization scenarios  
-- Input validation and boundary conditions
-- Error handling and recovery paths
-- Performance and load considerations
-
-Focus on practical, executable tests that provide maximum coverage and reliability."""
-            )
-    
-    async def fit(
-        self,
-        agent_function: Callable,
-        train_dataset: List[Dict[str, Any]],
-        val_dataset: List[Dict[str, Any]] = None,
-        max_iterations: int = 5
-    ) -> Dict[str, Any]:
-        """
-        Main training loop - the heart of Agent Lightning!
-        From docs: "A single call to trainer.fit() kicks off the entire process!"
-        """
-        
-        self.logger.info(f"Starting Agent Lightning training with {len(train_dataset)} tasks")
-        self.logger.info(f"Using {self.n_runners} parallel runners")
-        
-        best_prompt = self.current_prompt_template
-        best_score = 0.0
-        
-        for iteration in range(max_iterations):
-            print(f"\n🔄 AGENT LIGHTNING ITERATION {iteration + 1}/{max_iterations}")
-            print("=" * 50)
-            
-            # Step 1: Execute rollouts with current prompt
-            print(f"📊 Executing rollouts with prompt v{self.current_prompt_template.version}")
-            
-            tasks = [
-                Task(
-                    task_id=str(uuid.uuid4()),
-                    input_data=task_data
-                )
-                for task_data in train_dataset[:8]  # Use subset for faster training
-            ]
-            
-            # Run rollouts in parallel
-            rollout_tasks = []
-            for i, task in enumerate(tasks):
-                runner = self.runners[i % self.n_runners]
-                rollout_task = runner.execute_rollout(
-                    agent_function, task, self.current_prompt_template
-                )
-                rollout_tasks.append(rollout_task)
-            
-            rollouts = await asyncio.gather(*rollout_tasks)
-            
-            # Step 2: Evaluate current prompt performance
-            current_score = await self.algorithm.evaluate_prompt(
-                self.current_prompt_template, rollouts
-            )
-            
-            print(f"   Current prompt score: {current_score:.3f}")
-            print(f"   Completed rollouts: {len([r for r in rollouts if r.status == 'completed'])}")
-            print(f"   Average reward: {sum(r.final_reward for r in rollouts) / len(rollouts):.3f}")
-            
-            # Track best prompt
-            if current_score > best_score:
-                best_score = current_score
-                best_prompt = self.current_prompt_template
-                print(f"   🎉 New best prompt! Score: {best_score:.3f}")
-            
-            # Step 3: Generate critique and improve prompt
-            if iteration < max_iterations - 1:  # Don't improve on last iteration
-                print("🔍 Generating critique...")
-                critique = await self.algorithm.critique_prompt(
-                    self.current_prompt_template, rollouts
-                )
-                
-                print("✨ Generating improved prompt...")
-                improved_prompt = await self.algorithm.rewrite_prompt(
-                    self.current_prompt_template, critique
-                )
-                
-                self.current_prompt_template = improved_prompt
-                print(f"   Created prompt v{improved_prompt.version}")
-            
-            # Store training history
-            self.training_history.append({
-                "iteration": iteration + 1,
-                "prompt_template": self.current_prompt_template,
-                "rollouts": rollouts,
-                "score": current_score,
-                "critique": critique if iteration < max_iterations - 1 else None
-            })
-        
-        print(f"\n🏆 TRAINING COMPLETED!")
-        print(f"Best prompt score: {best_score:.3f}")
-        print(f"Prompt evolution: v1 → v{best_prompt.version}")
-        
-        return {
-            "best_prompt_template": best_prompt,
-            "best_score": best_score,
-            "final_score": current_score,
-            "training_history": self.training_history,
-            "total_rollouts": sum(len(h["rollouts"]) for h in self.training_history)
-        }
-
-
-# Convenience functions for easy usage
-def create_official_agent_lightning(openai_api_key: str = None):
-    """Create Agent Lightning system following official methodology."""
-    
-    # Initialize OpenAI client
-    if openai_api_key:
-        client = openai.AsyncOpenAI(api_key=openai_api_key)
-    else:
-        client = openai.AsyncOpenAI()  # Uses OPENAI_API_KEY env var
-    
-    # Create APO algorithm
-    algorithm = APOAlgorithm(client)
-    
-    # Create trainer
-    trainer = AgentLightningTrainer(
-        algorithm=algorithm,
-        n_runners=4,  # Parallel execution as per docs
-        initial_resources={
-            "prompt_template": PromptTemplate(
-                template_id="initial",
-                content="""You are a professional API testing specialist.
-
-Task: {nlp_prompt}
+Goal: {nlp_prompt}
 API: {spec_title}
 
-Generate comprehensive test suites that include:
-- Security testing (SQL injection, XSS, authentication bypass)
-- Input validation (boundary values, malformed data)
-- Error scenarios (invalid requests, server errors)
-- Performance testing (response times, load handling)
+Generate high-value test scenarios that maximize bug discovery:
+1. Positive and negative contract tests
+2. Security and abuse cases
+3. Boundary and malformed input tests
+4. AuthN/AuthZ behavior checks
+5. Error and recovery validation
 
-Create practical, executable tests with clear assertions and expected outcomes."""
-            )
-        }
+Return practical, executable test cases.
+"""
+
+
+@dataclass(frozen=True)
+class OfficialLightningConfig:
+    """Runtime configuration for official Agent Lightning integration."""
+
+    openai_api_key: Optional[str] = None
+    n_runners: int = 1
+    gradient_model: str = "gpt-5-mini"
+    apply_edit_model: str = "gpt-4.1-mini"
+    gradient_batch_size: int = 4
+    val_batch_size: int = 16
+    beam_width: int = 4
+    branch_factor: int = 2
+    beam_rounds: int = 2
+    rollout_batch_timeout: float = 180.0
+    run_initial_validation: bool = True
+    seed_prompt_template: str = DEFAULT_PROMPT_TEMPLATE
+
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
+
+
+def _compute_reward(result: Mapping[str, Any]) -> float:
+    """Compute scalar reward from the SpecTestPilot sandbox output.
+
+    The official runner can consume a direct numeric reward from rollout.
+    """
+    reward = 0.1
+
+    if bool(result.get("success", False)):
+        reward += 0.55
+
+    quality_score = result.get("quality_score")
+    if isinstance(quality_score, (int, float)):
+        reward += 0.25 * _clamp01(float(quality_score))
+
+    generated_tests = result.get("generated_tests")
+    if isinstance(generated_tests, list):
+        reward += min(0.1, len(generated_tests) * 0.01)
+    elif generated_tests:
+        reward += 0.05
+
+    errors = result.get("errors")
+    if isinstance(errors, list) and errors:
+        reward -= 0.15
+
+    return _clamp01(reward)
+
+
+@prompt_rollout
+def spec_test_pilot_rollout(task: Task, prompt_template: PromptTemplate) -> float:
+    """Official LitAgent rollout function using PromptTemplate resource.
+
+    The returned float is treated as final reward by Agent Lightning.
+    """
+    from .sandbox import AgentLightningSandbox
+
+    payload: Dict[str, Any] = dict(task)
+    payload.setdefault("spec_title", payload.get("spec_title", "Unknown API"))
+    payload.setdefault(
+        "nlp_prompt",
+        "Generate comprehensive API test scenarios with security, negative, and boundary coverage",
     )
-    
+
+    rendered_prompt = prompt_template.format(**payload)
+    payload["nlp_prompt"] = rendered_prompt
+
+    sandbox = AgentLightningSandbox()
+    result = sandbox.execute_agent_task(payload)
+    return _compute_reward(result)
+
+
+def create_official_spec_test_pilot_agent():
+    """Return a LitAgent backed by the official prompt_rollout decorator."""
+    return spec_test_pilot_rollout
+
+
+def create_official_agent_lightning(
+    openai_api_key: Optional[str] = None,
+    **overrides: Any,
+) -> Trainer:
+    """Create a real Agent Lightning Trainer using official package components.
+
+    Returns:
+        agentlightning.Trainer configured with:
+        - APO algorithm (official)
+        - TraceToMessages adapter (required by APO)
+        - PromptTemplate initial resource
+        - shared-memory execution strategy
+    """
+    config = OfficialLightningConfig(openai_api_key=openai_api_key, **overrides)
+
+    api_key = config.openai_api_key or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "OPENAI_API_KEY is required for official APO training. "
+            "Set env var OPENAI_API_KEY or pass openai_api_key=..."
+        )
+
+    try:
+        algorithm = APO(
+            async_openai_client=AsyncOpenAI(api_key=api_key),
+            gradient_model=config.gradient_model,
+            apply_edit_model=config.apply_edit_model,
+            gradient_batch_size=config.gradient_batch_size,
+            val_batch_size=config.val_batch_size,
+            beam_width=config.beam_width,
+            branch_factor=config.branch_factor,
+            beam_rounds=config.beam_rounds,
+            rollout_batch_timeout=config.rollout_batch_timeout,
+            run_initial_validation=config.run_initial_validation,
+        )
+    except ModuleNotFoundError as exc:
+        if exc.name == "poml":
+            raise RuntimeError(
+                "Official APO dependency missing (`poml`). Install the official APO extra with: "
+                "`venv/bin/pip install 'agentlightning[apo]>=0.1.0'` "
+                "or reinstall from `requirements.txt`."
+            ) from exc
+        raise
+
+    initial_prompt = PromptTemplate(template=config.seed_prompt_template, engine="f-string")
+
+    # APO requires TraceToMessages adapter and both train/val datasets.
+    trainer = Trainer(
+        algorithm=algorithm,
+        adapter=TraceToMessages(),
+        initial_resources={"qa_prompt_template": initial_prompt},
+        n_runners=config.n_runners,
+        strategy={"type": "shm", "main_thread": "algorithm"},
+    )
+
+    logger.info(
+        "Initialized official Agent Lightning Trainer (algorithm=%s, adapter=%s, strategy=shm)",
+        type(algorithm).__name__,
+        type(trainer.adapter).__name__,
+    )
     return trainer
 
 
-async def train_spec_test_pilot_official():
-    """Train SpecTestPilot using official Agent Lightning methodology."""
-    
-    print("🚀 OFFICIAL AGENT LIGHTNING TRAINING")
-    print("Based on Microsoft Research Documentation")
-    print("=" * 50)
-    
-    # Create trainer
-    trainer = create_official_agent_lightning()
-    
-    # Prepare training dataset
-    train_dataset = [
-        {
-            "spec_title": "Banking API",
-            "nlp_prompt": "Generate comprehensive security tests with SQL injection protection",
-            "openapi_spec": "examples/banking_api.yaml",
-            "tenant_id": "banking_corp"
-        },
-        {
-            "spec_title": "E-commerce API", 
-            "nlp_prompt": "Create authentication and authorization test scenarios",
-            "openapi_spec": "examples/ecommerce_api.yaml",
-            "tenant_id": "shop_corp"
-        },
-        {
-            "spec_title": "Social Media API",
-            "nlp_prompt": "Test input validation and boundary conditions",
-            "openapi_spec": "examples/social_api.yaml", 
-            "tenant_id": "social_corp"
-        },
-        {
-            "spec_title": "Payment Gateway",
-            "nlp_prompt": "Generate error handling and recovery tests",
-            "openapi_spec": "examples/payment_api.yaml",
-            "tenant_id": "payment_corp"
-        }
-    ]
-    
-    # Dummy agent function (will use SpecTestPilot via sandbox)
-    async def spec_test_pilot_agent(task_data):
-        return {"status": "executed", "task": task_data}
-    
-    # Run official training
-    results = await trainer.fit(
-        agent_function=spec_test_pilot_agent,
-        train_dataset=train_dataset,
-        max_iterations=3  # Keep small for demo
-    )
-    
-    print("\n📊 TRAINING RESULTS:")
-    print(f"Best prompt score: {results['best_score']:.3f}")
-    print(f"Total rollouts executed: {results['total_rollouts']}")
-    print(f"Prompt evolved from v1 to v{results['best_prompt_template'].version}")
-    
-    print("\n✨ FINAL OPTIMIZED PROMPT:")
-    print("-" * 30)
-    print(results['best_prompt_template'].content)
-    
-    return results
+def train_spec_test_pilot_official(
+    train_dataset: Iterable[Task],
+    val_dataset: Optional[Iterable[Task]] = None,
+    **trainer_kwargs: Any,
+) -> Dict[str, Any]:
+    """Run one official Agent Lightning training session and return summary."""
+    train_data: List[Task] = list(train_dataset)
+    if not train_data:
+        raise ValueError("train_dataset must contain at least one task")
+
+    val_data: List[Task] = list(val_dataset) if val_dataset is not None else list(train_data)
+    if not val_data:
+        raise ValueError("val_dataset must contain at least one task")
+
+    trainer = create_official_agent_lightning(**trainer_kwargs)
+    agent = create_official_spec_test_pilot_agent()
+
+    trainer.fit(agent=agent, train_dataset=train_data, val_dataset=val_data)
+
+    best_prompt = None
+    if trainer.algorithm is not None and hasattr(trainer.algorithm, "get_best_prompt"):
+        try:
+            best_prompt = trainer.algorithm.get_best_prompt()
+        except Exception:
+            best_prompt = None
+
+    return {
+        "trainer": trainer,
+        "algorithm": type(trainer.algorithm).__name__ if trainer.algorithm is not None else None,
+        "adapter": type(trainer.adapter).__name__,
+        "n_runners": trainer.n_runners,
+        "train_size": len(train_data),
+        "val_size": len(val_data),
+        "best_prompt": best_prompt,
+    }
 
 
-if __name__ == "__main__":
-    # Demo the official implementation
-    asyncio.run(train_spec_test_pilot_official())
+__all__ = [
+    "Task",
+    "PromptTemplate",
+    "OfficialLightningConfig",
+    "create_official_agent_lightning",
+    "create_official_spec_test_pilot_agent",
+    "spec_test_pilot_rollout",
+    "train_spec_test_pilot_official",
+]

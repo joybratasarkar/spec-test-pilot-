@@ -1,228 +1,107 @@
 #!/usr/bin/env python3
-"""
-Official Agent Lightning Runner
-Demonstrates how to properly run Agent Lightning following Microsoft's documentation
-"""
+"""Run SpecTestPilot with the official Microsoft Agent Lightning library."""
 
-import asyncio
+from __future__ import annotations
+
+import argparse
 import os
-import sys
-import json
-sys.path.append('.')
+from typing import Any, Dict, List
 
 from spec_test_pilot.agent_lightning_official import (
     create_official_agent_lightning,
-    Task,
-    PromptTemplate
+    create_official_spec_test_pilot_agent,
 )
 
 
-async def run_official_agent_lightning():
-    """Run Agent Lightning following the official documentation methodology."""
-    
-    print("🚀 OFFICIAL MICROSOFT AGENT LIGHTNING")
-    print("=" * 42)
-    print("Following: https://microsoft.github.io/agent-lightning/latest/")
-    print()
-    
-    print("📋 STEP 1: CREATING TRAINER (Official Method)")
-    print("-" * 45)
-    print("Code: trainer = create_official_agent_lightning()")
-    
-    # Note: We'll use a mock OpenAI client since we don't have real API key
-    # In production, you'd set OPENAI_API_KEY environment variable
-    
-    try:
-        trainer = create_official_agent_lightning()
-        print("✅ Official Agent Lightning trainer created")
-        print(f"   • APO Algorithm: Ready")
-        print(f"   • {trainer.n_runners} Parallel Runners: Ready") 
-        print(f"   • Prompt Template System: Initialized")
-        print()
-    except Exception as e:
-        print(f"⚠️  OpenAI client creation failed (expected without API key): {e}")
-        print("   Continuing with demo using mock components...")
-        
-        # Create mock trainer for demo
-        class MockTrainer:
-            def __init__(self):
-                self.current_prompt_template = PromptTemplate(
-                    template_id="demo",
-                    content="Generate {nlp_prompt} for {spec_title} API with comprehensive coverage"
-                )
-            
-            async def fit(self, agent_function, train_dataset, **kwargs):
-                print("🔄 Mock training with official methodology...")
-                
-                results = []
-                for i, task_data in enumerate(train_dataset[:3], 1):
-                    print(f"   Rollout {i}: {task_data['spec_title']}")
-                    
-                    # Simulate agent execution
-                    from spec_test_pilot.sandbox import AgentLightningSandbox
-                    sandbox = AgentLightningSandbox()
-                    
-                    enhanced_input = task_data.copy()
-                    enhanced_input['nlp_prompt'] = self.current_prompt_template.content.format(**task_data)
-                    
-                    result = sandbox.execute_agent_task(enhanced_input)
-                    reward = 0.85 if result.get('success') else 0.3
-                    
-                    results.append({
-                        'task': task_data,
-                        'result': result,
-                        'reward': reward
-                    })
-                    
-                    print(f"      Success: {result.get('success')}")
-                    print(f"      Reward: {reward}")
-                
-                return {
-                    'best_score': sum(r['reward'] for r in results) / len(results),
-                    'total_rollouts': len(results),
-                    'results': results
-                }
-        
-        trainer = MockTrainer()
-        print("✅ Mock trainer created for demonstration")
-        print()
-    
-    print("📋 STEP 2: PREPARING TRAINING DATASET")
-    print("-" * 37)
-    
-    # Official Agent Lightning training dataset
-    train_dataset = [
+def _build_demo_dataset() -> List[Dict[str, Any]]:
+    return [
         {
             "spec_title": "Banking Security API",
-            "nlp_prompt": "Generate comprehensive security tests including SQL injection, XSS, and authentication bypass scenarios",
+            "nlp_prompt": "Generate high-risk security and negative API tests",
             "openapi_spec": "examples/banking_api.yaml",
             "tenant_id": "security_banking",
-            "expected_quality": 0.9
         },
         {
-            "spec_title": "E-commerce Payment API", 
-            "nlp_prompt": "Create payment processing tests with fraud detection and error handling",
+            "spec_title": "E-commerce API",
+            "nlp_prompt": "Generate test cases for auth, input validation, and order flows",
             "openapi_spec": "examples/ecommerce_api.yaml",
-            "tenant_id": "ecommerce_payments",
-            "expected_quality": 0.85
+            "tenant_id": "ecommerce_qa",
         },
         {
             "spec_title": "Healthcare Data API",
-            "nlp_prompt": "Test HIPAA compliance validation and data privacy controls",
+            "nlp_prompt": "Generate data privacy and strict validation tests",
             "openapi_spec": "examples/healthcare_api.yaml",
-            "tenant_id": "healthcare_compliance", 
-            "expected_quality": 0.95
+            "tenant_id": "healthcare_qa",
         },
         {
-            "spec_title": "Social Media Content API",
-            "nlp_prompt": "Generate content moderation and user authentication tests",
+            "spec_title": "Social Media API",
+            "nlp_prompt": "Generate abuse, moderation, and authorization test scenarios",
             "openapi_spec": "examples/social_api.yaml",
-            "tenant_id": "social_content",
-            "expected_quality": 0.8
-        }
+            "tenant_id": "social_qa",
+        },
     ]
-    
-    print(f"Training dataset: {len(train_dataset)} tasks")
-    for i, task in enumerate(train_dataset, 1):
-        print(f"   {i}. {task['spec_title']}")
-        print(f"      Prompt: \"{task['nlp_prompt'][:50]}...\"")
-        print(f"      Expected quality: {task['expected_quality']}")
-    
-    print()
-    
-    print("📋 STEP 3: RUNNING OFFICIAL TRAINING LOOP")
-    print("-" * 40)
-    print("Code: results = await trainer.fit(agent=spec_test_pilot, train_dataset=dataset)")
-    print()
-    
-    # Agent function that integrates with existing SpecTestPilot
-    async def spec_test_pilot_agent(task_data):
-        """Official Agent Lightning compatible agent function."""
-        
-        from spec_test_pilot.sandbox import AgentLightningSandbox
-        
-        # Execute SpecTestPilot in sandbox
-        sandbox = AgentLightningSandbox()
-        result = sandbox.execute_agent_task(task_data)
-        
-        # Return in Agent Lightning format
-        return {
-            "success": result.get("success", False),
-            "output": result,
-            "quality_score": 0.9 if result.get("success") else 0.3,
-            "agent_output": result.get("generated_tests", "No tests generated")
-        }
-    
-    # Run the official training
-    print("🏋️ EXECUTING OFFICIAL AGENT LIGHTNING TRAINING...")
-    
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Official Agent Lightning runner")
+    parser.add_argument("--openai-api-key", default=os.getenv("OPENAI_API_KEY"), help="OpenAI API key")
+    parser.add_argument("--n-runners", type=int, default=1)
+    parser.add_argument("--beam-rounds", type=int, default=2)
+    parser.add_argument("--beam-width", type=int, default=4)
+    parser.add_argument("--branch-factor", type=int, default=2)
+    parser.add_argument("--gradient-model", default="gpt-5-mini")
+    parser.add_argument("--apply-edit-model", default="gpt-4.1-mini")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+
+    train_dataset = _build_demo_dataset()
+    val_dataset = list(train_dataset)
+
+    print("OFFICIAL AGENT LIGHTNING RUN")
+    print("=")
+
     try:
-        results = await trainer.fit(
-            agent_function=spec_test_pilot_agent,
-            train_dataset=train_dataset,
-            max_iterations=2  # Smaller for demo
+        trainer = create_official_agent_lightning(
+            openai_api_key=args.openai_api_key,
+            n_runners=args.n_runners,
+            beam_rounds=args.beam_rounds,
+            beam_width=args.beam_width,
+            branch_factor=args.branch_factor,
+            gradient_model=args.gradient_model,
+            apply_edit_model=args.apply_edit_model,
         )
-        
-        print("✅ TRAINING COMPLETED SUCCESSFULLY!")
-        print()
-        
-        print("📊 OFFICIAL TRAINING RESULTS:")
-        print(f"   Best prompt score: {results['best_score']:.3f}")
-        print(f"   Total rollouts: {results['total_rollouts']}")
-        print(f"   Prompt evolution: v1 → v{results.get('best_prompt_template', {}).get('version', 1)}")
-        
-        # Show improved prompt if available
-        if 'best_prompt_template' in results:
-            print()
-            print("✨ INITIAL PROMPT TEMPLATE:")
-        prompt_lines = trainer.current_prompt_template.content.split("\n")
-        for line in prompt_lines:
-            print(f"   {line}")
-        
-        return results
-        
-    except Exception as e:
-        print(f"⚠️  Training requires OpenAI API key: {e}")
-        print()
-        print("🔄 RUNNING SIMPLIFIED DEMO WITHOUT API CALLS:")
-        
-        # Run simplified version to show the structure
-        demo_results = {
-            'best_score': 0.87,
-            'total_rollouts': 6,
-            'prompt_iterations': 2,
-            'agent_improvements': True
-        }
-        
-        print("✅ Demo completed:")
-        for key, value in demo_results.items():
-            print(f"   {key}: {value}")
-        
-        return demo_results
+        agent = create_official_spec_test_pilot_agent()
 
-# Run the official implementation test
-result = asyncio.run(run_official_agent_lightning())
+        print(f"Trainer type: {type(trainer).__name__}")
+        print(f"Algorithm type: {type(trainer.algorithm).__name__ if trainer.algorithm else 'None'}")
+        print(f"Adapter type: {type(trainer.adapter).__name__}")
+        print(f"Runners: {trainer.n_runners}")
+        print(f"Train tasks: {len(train_dataset)} | Val tasks: {len(val_dataset)}")
 
-print()
-print('🎯 OFFICIAL AGENT LIGHTNING STATUS:')
+        trainer.fit(agent=agent, train_dataset=train_dataset, val_dataset=val_dataset)
 
-if result and result.get('total_rollouts', 0) > 0:
-    print('✅ IMPLEMENTATION FOLLOWS OFFICIAL METHODOLOGY:')
-    print('   • Tasks → Rollouts → Spans structure')
-    print('   • APO algorithm with evaluate→critique→rewrite')
-    print('   • Parallel runner execution')
-    print('   • Prompt template optimization')
-    print('   • Integration with existing SpecTestPilot agent')
-    print('   • Ready for production use with OpenAI API key')
-    print()
-    print('🚀 This is the REAL Agent Lightning as designed by Microsoft!')
-else:
-    print('⚠️  Need OpenAI API key for full functionality')
-    print('   Structure implemented correctly, needs API access')
+        best_prompt_text = None
+        if trainer.algorithm is not None and hasattr(trainer.algorithm, "get_best_prompt"):
+            try:
+                best_prompt = trainer.algorithm.get_best_prompt()
+                best_prompt_text = best_prompt.template
+            except Exception:
+                best_prompt_text = None
 
-print()
-print('📋 HOW TO USE IN PRODUCTION:')
-print('   1. Set OPENAI_API_KEY environment variable')
-print('   2. Run: python run_official_agent_lightning.py')
-print('   3. Agent will automatically improve its prompts over time')
-print('   4. Better prompts = better test generation quality')
+        print("Training completed through official agentlightning package.")
+        if best_prompt_text:
+            print("Best prompt (first 300 chars):")
+            print(best_prompt_text[:300])
+
+        return 0
+    except Exception as exc:
+        print(f"Run failed: {exc}")
+        print("If this is an API/auth/network issue, set OPENAI_API_KEY and retry.")
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

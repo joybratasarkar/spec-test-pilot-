@@ -31,8 +31,8 @@ python-dotenv>=1.0.0
 # OpenAI (for real model training)
 openai>=1.0.0
 
-# Agent Lightning (for RL training)
-agentlightning>=0.1.0
+# Agent Lightning (for RL training + official APO dependencies)
+agentlightning[apo]>=0.1.0
 
 # Isolated API execution sandbox
 fastapi>=0.110.0
