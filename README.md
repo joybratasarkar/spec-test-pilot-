@@ -3,15 +3,17 @@
 This project is organized into two customer-facing entry folders:
 
 1. `backend/` - FastAPI backend and QA agent runtime
-2. `fe/` - Next.js frontend (customer UI)
+2. `frontend/` - Next.js frontend (customer UI)
 
-The existing source code remains in the current repo locations (`spec_test_pilot/`, `qa_customer_ui.py`, `customer-ui-next/`) to avoid breaking imports and scripts.  
-Use the wrapper scripts inside `backend/` and `fe/` as the primary start points.
+The code is physically separated:
+
+1. backend Python runtime and agent code live under `backend/`
+2. frontend Next.js application lives under `frontend/customer-ui-next/`
 
 ## Folder Guide
 
 1. Backend guide: `backend/README.md`
-2. Frontend guide: `fe/README.md`
+2. Frontend guide: `frontend/README.md`
 3. Technical deep docs: `docs/README.md`
 
 ## Quick Start (split FE/BE)
@@ -23,7 +25,7 @@ Use the wrapper scripts inside `backend/` and `fe/` as the primary start points.
 
 2. Start frontend (new terminal):
 ```bash
-./fe/start-frontend.sh
+./frontend/start-frontend.sh
 ```
 
 3. Open UI:
@@ -36,5 +38,5 @@ http://localhost:3001
 If you want frontend with built-in local API routes only:
 
 ```bash
-./fe/start-full-next.sh
+./frontend/start-full-next.sh
 ```

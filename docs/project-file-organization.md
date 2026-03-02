@@ -5,51 +5,51 @@ This document lists the current working file layout and which files are used at 
 ## 1. Runtime Entry Points
 
 1. QA specialist pipeline:
-- `qa_specialist_runner.py`
-- calls `spec_test_pilot/qa_specialist_agent.py:main`
+- `backend/qa_specialist_runner.py`
+- calls `backend/spec_test_pilot/qa_specialist_agent.py:main`
 
 2. Domain convenience runner:
-- `run_qa_domain.sh`
-- generates preset OpenAPI specs and runs `qa_specialist_runner.py`
+- `backend/run_qa_domain.sh`
+- generates preset OpenAPI specs and runs `backend/qa_specialist_runner.py`
 
 3. Official Agent Lightning package runner:
-- `official_agent_lightning_runner.py`
-- uses `spec_test_pilot/agent_lightning_official.py`
+- `backend/official_agent_lightning_runner.py`
+- uses `backend/spec_test_pilot/agent_lightning_official.py`
 
 4. Customer web UI runner:
-- `qa_customer_ui.py`
+- `backend/qa_customer_ui.py`
 - FastAPI UI for multi-domain click-to-run execution and report viewing
 
 5. Next.js customer web UI:
-- `customer-ui-next/`
-- Next.js app with API routes that run `run_qa_domain.sh` and stream job/report state
+- `frontend/customer-ui-next/`
+- Next.js app with API routes that run `backend/run_qa_domain.sh` and stream job/report state
 
 ## 2. Core Runtime Files
 
 ## 2.1 QA pipeline
 
-1. `spec_test_pilot/qa_specialist_agent.py`
+1. `backend/spec_test_pilot/qa_specialist_agent.py`
 - end-to-end orchestrator
 - selection, execution, learning, reporting
 
-2. `spec_test_pilot/adaptive_policy.py`
+2. `backend/spec_test_pilot/adaptive_policy.py`
 - contextual linear-UCB scenario policy
 - persisted policy state (`A`, `b`, scenario stats)
 
-3. `spec_test_pilot/multi_language_tester.py`
+3. `backend/spec_test_pilot/multi_language_tester.py`
 - scenario generation + test artifact generation
 
-4. `agent_lightning_server.py`
+4. `backend/agent_lightning_server.py`
 - dynamic mock API server from OpenAPI
 
 ## 2.2 RL components
 
-1. `spec_test_pilot/agent_lightning_v2.py`
+1. `backend/spec_test_pilot/agent_lightning_v2.py`
 - currently used RL trainer in QA pipeline
 - observability + credit assignment + replay/value training
 - checkpoint save/load
 
-2. `spec_test_pilot/agent_lightning_official.py`
+2. `backend/spec_test_pilot/agent_lightning_official.py`
 - official package adapter layer
 - uses `agentlightning` Trainer/APO APIs
 - used by `official_agent_lightning_runner.py`
@@ -81,4 +81,4 @@ Each QA run output directory contains:
 ## 5. Notes
 
 1. Historical root-level markdown files were consolidated into `docs/`.
-2. The QA production path and official package path are both present, but only the QA path is used by `qa_specialist_runner.py`.
+2. The QA production path and official package path are both present, but only the QA path is used by `backend/qa_specialist_runner.py`.

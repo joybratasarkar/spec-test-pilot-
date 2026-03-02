@@ -455,7 +455,9 @@ YAML
 }
 
 resolve_python() {
-  if [[ -x "venv/bin/python" ]]; then
+  if [[ -x "../venv/bin/python" ]]; then
+    echo "../venv/bin/python"
+  elif [[ -x "venv/bin/python" ]]; then
     echo "venv/bin/python"
   elif command -v python3 >/dev/null 2>&1; then
     echo "python3"

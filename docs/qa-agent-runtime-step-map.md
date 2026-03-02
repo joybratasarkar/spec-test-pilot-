@@ -374,7 +374,7 @@ Reported back to QA report:
 
 1. Run a domain:
 ```bash
-./run_qa_domain.sh --domain ecommerce --action both --output-dir /tmp/qa_map_demo --rl-checkpoint /tmp/qa_map_demo.pt
+./backend/run_qa_domain.sh --domain ecommerce --action both --output-dir /tmp/qa_map_demo --rl-checkpoint /tmp/qa_map_demo.pt
 ```
 
 2. Inspect final report keys:

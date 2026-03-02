@@ -2,7 +2,7 @@
 """Customer-facing UI to run multi-domain QA agent tests.
 
 Launch:
-    venv/bin/python qa_customer_ui.py
+    ./backend/run_customer_backend_fastapi.sh
 Open:
     http://127.0.0.1:8787
 """

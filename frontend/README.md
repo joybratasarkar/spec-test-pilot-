@@ -1,4 +1,4 @@
-# FE (Frontend)
+# Frontend
 
 This folder is the frontend entrypoint layer for the customer UI.
 
@@ -20,7 +20,7 @@ You can run frontend in two modes:
 
 2. Start frontend:
 ```bash
-./fe/start-frontend.sh
+./frontend/start-frontend.sh
 ```
 
 3. Open:
@@ -33,7 +33,7 @@ In this mode, frontend calls FastAPI directly (`http://127.0.0.1:8787` by defaul
 ## Full Next Mode
 
 ```bash
-./fe/start-full-next.sh
+./frontend/start-full-next.sh
 ```
 
 This runs Next.js UI with its own Node API routes.

@@ -2,7 +2,7 @@
 
 This folder is the backend entrypoint layer for the QA agent system.
 
-It wraps the existing backend/runtime code in the repo root:
+Backend runtime code is now physically located in this folder:
 
 1. FastAPI app: `qa_customer_ui.py`
 2. Domain runner: `run_qa_domain.sh`

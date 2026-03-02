@@ -16,11 +16,11 @@ function safeToken(value, fallback = 'token') {
 }
 
 function buildScriptPath() {
-  return path.resolve(process.cwd(), '..', 'run_qa_domain.sh');
+  return path.resolve(process.cwd(), '..', '..', 'backend', 'run_qa_domain.sh');
 }
 
 function buildRepoRoot() {
-  return path.resolve(process.cwd(), '..');
+  return path.resolve(process.cwd(), '..', '..', 'backend');
 }
 
 async function ensureDirs() {

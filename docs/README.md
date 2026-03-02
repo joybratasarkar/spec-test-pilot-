@@ -13,30 +13,30 @@ This README reflects the current code paths and verified runtime behavior as of 
 
 ## Current Runtime Modes
 
-1. Production QA pipeline (used by `qa_specialist_runner.py`):
-- `spec_test_pilot/qa_specialist_agent.py`
-- `spec_test_pilot/agent_lightning_v2.py`
-- `spec_test_pilot/adaptive_policy.py`
+1. Production QA pipeline (used by `backend/qa_specialist_runner.py`):
+- `backend/spec_test_pilot/qa_specialist_agent.py`
+- `backend/spec_test_pilot/agent_lightning_v2.py`
+- `backend/spec_test_pilot/adaptive_policy.py`
 
 2. Official Agent Lightning package integration (separate runner):
-- `official_agent_lightning_runner.py`
-- `spec_test_pilot/agent_lightning_official.py`
+- `backend/official_agent_lightning_runner.py`
+- `backend/spec_test_pilot/agent_lightning_official.py`
 
 ## Quick Start
 
 1. Install dependencies:
 ```bash
-venv/bin/pip install -r requirements.txt
+venv/bin/pip install -r backend/requirements.txt
 ```
 
 2. Customer-facing one-command run (recommended):
 ```bash
-./run_qa_domain.sh --domain ecommerce --customer-mode --verify-persistence
+./backend/run_qa_domain.sh --domain ecommerce --customer-mode --verify-persistence
 ```
 
 3. Classic advanced mode (manual control):
 ```bash
-./run_qa_domain.sh \
+./backend/run_qa_domain.sh \
   --domain ecommerce \
   --action both \
   --output-dir /tmp/qa_ecommerce_run \
@@ -55,7 +55,7 @@ Customer mode behavior:
 Run the button-based UI:
 
 ```bash
-venv/bin/python qa_customer_ui.py
+./backend/run_customer_backend_fastapi.sh
 ```
 
 Open:
@@ -76,10 +76,10 @@ UI capabilities:
 
 If you want the customer UI in Next.js instead of Python:
 
-1. Go to [customer-ui-next/README.md](/Users/sjoybrata/Desktop/reinforcement-agent/customer-ui-next/README.md)
+1. Go to [customer-ui-next/README.md](/Users/sjoybrata/Desktop/reinforcement-agent/frontend/customer-ui-next/README.md)
 2. Install and run:
 ```bash
-cd customer-ui-next
+cd frontend/customer-ui-next
 npm install
 npm run dev
 ```
@@ -95,7 +95,7 @@ npm run dev
 One-command launcher from repo root:
 
 ```bash
-./run_customer_ui_next.sh
+./frontend/run_customer_ui_next.sh
 ```
 
 ## Split Mode: FastAPI Backend + Next.js Frontend
@@ -105,13 +105,13 @@ If you want backend explicitly in FastAPI:
 Terminal 1 (backend):
 ```bash
 cd /Users/sjoybrata/Desktop/reinforcement-agent
-./run_customer_backend_fastapi.sh
+./backend/run_customer_backend_fastapi.sh
 ```
 
 Terminal 2 (frontend):
 ```bash
 cd /Users/sjoybrata/Desktop/reinforcement-agent
-NEXT_PUBLIC_BACKEND_BASE_URL=http://127.0.0.1:8787 ./run_customer_frontend_next.sh
+NEXT_PUBLIC_BACKEND_BASE_URL=http://127.0.0.1:8787 ./frontend/run_customer_frontend_next.sh
 ```
 
 Open:
@@ -127,7 +127,7 @@ The UI automatically switches to direct FastAPI calls when `NEXT_PUBLIC_BACKEND_
 Command pattern used:
 
 ```bash
-./run_qa_domain.sh --domain <domain> --action both --max-scenarios 16 --output-dir <dir> --rl-checkpoint <checkpoint>
+./backend/run_qa_domain.sh --domain <domain> --action both --max-scenarios 16 --output-dir <dir> --rl-checkpoint <checkpoint>
 ```
 
 Observed outputs:

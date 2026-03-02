@@ -210,12 +210,12 @@ Rerun ecommerce with same checkpoint:
 
 1. Run one domain:
 ```bash
-./run_qa_domain.sh --domain ecommerce --action both --max-scenarios 16 --rl-checkpoint /tmp/qa_docs_ecommerce.pt
+./backend/run_qa_domain.sh --domain ecommerce --action both --max-scenarios 16 --rl-checkpoint /tmp/qa_docs_ecommerce.pt
 ```
 
 2. Rerun same checkpoint:
 ```bash
-./run_qa_domain.sh --domain ecommerce --action run --spec-path /tmp/openapi_ecommerce.yaml --max-scenarios 16 --rl-checkpoint /tmp/qa_docs_ecommerce.pt
+./backend/run_qa_domain.sh --domain ecommerce --action run --spec-path /tmp/openapi_ecommerce.yaml --max-scenarios 16 --rl-checkpoint /tmp/qa_docs_ecommerce.pt
 ```
 
 3. Inspect RL counters from report:

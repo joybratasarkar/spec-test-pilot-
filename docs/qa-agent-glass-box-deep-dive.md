@@ -501,7 +501,7 @@ If one scenario fails across many runs, common reasons are:
 Run with persistence check:
 
 ```bash
-./run_qa_domain.sh --domain ecommerce --customer-mode --verify-persistence
+./backend/run_qa_domain.sh --domain ecommerce --customer-mode --verify-persistence
 ```
 
 Inspect RL counters:

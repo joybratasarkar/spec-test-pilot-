@@ -19,7 +19,7 @@ fi
 if [[ ! -x "node_modules/.bin/next" ]]; then
   echo "[ERROR] Next.js binary not found after install." >&2
   echo "Try running manually:" >&2
-  echo "  cd customer-ui-next && npm install && npx next --version" >&2
+  echo "  cd frontend/customer-ui-next && npm install && npx next --version" >&2
   exit 1
 fi
 
@@ -48,7 +48,7 @@ UI_PORT="${UI_PORT:-3001}"
 if ! SELECTED_PORT="$(pick_port "${UI_PORT}")"; then
   echo "[ERROR] No available port found in range 3001-3010." >&2
   echo "Free a port or run with explicit UI_PORT, e.g.:" >&2
-  echo "  UI_PORT=3011 ./run_customer_ui_next.sh" >&2
+  echo "  UI_PORT=3011 ./frontend/run_customer_ui_next.sh" >&2
   exit 1
 fi
 

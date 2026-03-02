@@ -29,7 +29,7 @@ Browser UI for running the QA agent across multiple domains with one click.
 
 1. Install dependencies:
 ```bash
-cd customer-ui-next
+cd frontend/customer-ui-next
 npm install
 ```
 
@@ -48,8 +48,7 @@ http://localhost:3001
 Terminal 1 (FastAPI backend):
 
 ```bash
-cd ..
-./run_customer_backend_fastapi.sh
+./backend/run_customer_backend_fastapi.sh
 ```
 
 Terminal 2 (Next.js frontend):
@@ -60,7 +59,7 @@ NEXT_PUBLIC_BACKEND_BASE_URL=http://127.0.0.1:8787 npm run dev -- -p 3001
 
 ## Notes
 
-1. API routes run on Node.js runtime and spawn `../run_qa_domain.sh`.
+1. API routes run on Node.js runtime and spawn `backend/run_qa_domain.sh`.
 2. Run outputs are stored under `/tmp/qa_ui_next_runs`.
 3. Per-domain checkpoints are stored under `/tmp/qa_ui_next_checkpoints`.
 4. Frontend receives real-time updates over SSE and falls back to polling if stream disconnects.
