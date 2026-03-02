@@ -26,7 +26,8 @@ This README reflects the current code paths and verified runtime behavior as of 
 
 1. Install dependencies:
 ```bash
-venv/bin/pip install -r backend/requirements.txt
+python3 -m venv backend/.venv
+backend/.venv/bin/pip install -r backend/requirements.txt
 ```
 
 2. Customer-facing one-command run (recommended):
@@ -180,7 +181,7 @@ Each run writes:
 Expected fix:
 
 ```bash
-venv/bin/pip install 'agentlightning[apo]>=0.1.0'
+backend/.venv/bin/pip install 'agentlightning[apo]>=0.1.0'
 ```
 
 If network/package index is restricted, this install must be done in an environment with package access.

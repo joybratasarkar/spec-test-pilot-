@@ -10,10 +10,12 @@ BACKEND_RELOAD="${BACKEND_RELOAD:-0}"
 
 cd "${ROOT_DIR}"
 
-if [[ -x "${REPO_ROOT}/venv/bin/python" ]]; then
-  PYTHON_BIN="${REPO_ROOT}/venv/bin/python"
+if [[ -x "${ROOT_DIR}/.venv/bin/python" ]]; then
+  PYTHON_BIN="${ROOT_DIR}/.venv/bin/python"
 elif [[ -x "venv/bin/python" ]]; then
   PYTHON_BIN="venv/bin/python"
+elif [[ -x "${REPO_ROOT}/venv/bin/python" ]]; then
+  PYTHON_BIN="${REPO_ROOT}/venv/bin/python"
 else
   PYTHON_BIN="python3"
 fi

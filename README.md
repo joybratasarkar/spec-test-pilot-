@@ -18,17 +18,23 @@ The code is physically separated:
 
 ## Quick Start (split FE/BE)
 
-1. Start backend:
+1. Create backend environment (first time):
+```bash
+python3 -m venv backend/.venv
+backend/.venv/bin/pip install -r backend/requirements.txt
+```
+
+2. Start backend:
 ```bash
 ./backend/start-backend.sh
 ```
 
-2. Start frontend (new terminal):
+3. Start frontend (new terminal):
 ```bash
 ./frontend/start-frontend.sh
 ```
 
-3. Open UI:
+4. Open UI:
 ```text
 http://localhost:3001
 ```

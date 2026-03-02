@@ -12,6 +12,7 @@ __pycache__/
 venv/
 env/
 .venv/
+backend/.venv/
 
 # Data (generated)
 data/train.jsonl

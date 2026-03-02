@@ -11,6 +11,13 @@ Backend runtime code is now physically located in this folder:
 
 ## Start FastAPI backend
 
+1. Create backend venv (first time):
+```bash
+python3 -m venv backend/.venv
+backend/.venv/bin/pip install -r backend/requirements.txt
+```
+
+2. Start backend:
 ```bash
 ./backend/start-backend.sh
 ```
