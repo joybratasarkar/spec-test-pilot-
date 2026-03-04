@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run SpecTestPilot with the official Microsoft Agent Lightning library."""
+"""Run SpecForge with the official Microsoft Agent Lightning library."""
 
 from __future__ import annotations
 

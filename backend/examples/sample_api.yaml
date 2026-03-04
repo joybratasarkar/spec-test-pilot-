@@ -2,7 +2,7 @@ openapi: "3.0.3"
 info:
   title: "Pet Store API"
   version: "1.0.0"
-  description: "A sample Pet Store API for testing SpecTestPilot"
+  description: "A sample Pet Store API for testing SpecForge"
 servers:
   - url: "https://api.petstore.com/v1"
 paths:

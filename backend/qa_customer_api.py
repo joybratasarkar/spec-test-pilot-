@@ -26,7 +26,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Str
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-APP_TITLE = "SpecTestPilot Customer QA UI"
+APP_TITLE = "SpecForge Customer QA UI"
 DOMAIN_PRESETS = ["ecommerce", "healthcare", "logistics", "hr"]
 DOMAIN_PRESET_SET = set(DOMAIN_PRESETS)
 SUPPORTED_SCRIPT_KINDS = [
@@ -521,7 +521,7 @@ def index() -> str:
 <head>
   <meta charset=\"utf-8\" />
   <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
-  <title>SpecTestPilot Customer QA UI</title>
+  <title>SpecForge Customer QA UI</title>
   <style>
     :root {
       --bg: #f8f7f2;
@@ -655,7 +655,7 @@ def index() -> str:
 </head>
 <body>
   <header>
-    <h1>SpecTestPilot Customer QA Runner</h1>
+    <h1>SpecForge Customer QA Runner</h1>
   </header>
 
   <div class=\"wrap\">

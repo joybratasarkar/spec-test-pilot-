@@ -1,102 +1,96 @@
-# Reinforcement QA Agent
+# SpecForge
 
-This project is organized into two customer-facing entry folders:
+Open-source QA agent platform for OpenAPI-driven testing with:
 
-1. `backend/` - FastAPI backend and QA agent runtime
-2. `frontend/` - Next.js frontend (customer UI)
+1. Scenario generation (LLM + heuristics fallback)
+2. GAM memory/research context enrichment
+3. RL-guided mutation and scenario selection
+4. Isolated API execution and verification
+5. Structured reporting and reproducible failure artifacts
 
-The code is physically separated:
+## License
 
-1. backend Python runtime and agent code live under `backend/`
-2. frontend Next.js application lives under `frontend/customer-ui-next/`
+Dual licensed under:
 
-## Folder Guide
+1. MIT (`LICENSE-MIT`)
+2. Apache-2.0 (`LICENSE-APACHE`)
 
-1. Backend guide: `backend/README.md`
-2. Frontend guide: `frontend/README.md`
-3. Technical deep docs: `docs/README.md`
+You may use this project under either license.
 
-## Quick Start (split FE/BE)
+## Quick Start
 
-1. Create backend environment (first time):
+1. Create backend virtual environment and install dependencies.
+
 ```bash
 python3 -m venv backend/.venv
 backend/.venv/bin/pip install -r backend/requirements.txt
 ```
 
-2. Start backend:
+2. Start backend API.
+
 ```bash
 ./backend/start-backend.sh
 ```
 
-3. Start frontend (new terminal):
+3. Start frontend UI in a new terminal.
+
 ```bash
 ./frontend/start-frontend.sh
 ```
 
-4. Open UI:
+4. Open the UI.
+
 ```text
 http://localhost:3001
 ```
 
-## One-command UI mode
+## Common Run Commands
 
-If you want frontend with built-in local API routes only:
+1. Run a QA domain execution.
+
+```bash
+./backend/run_qa_domain.sh --domain ecommerce --customer-mode --verify-persistence
+```
+
+2. Run backend customer API server.
+
+```bash
+./backend/run_customer_backend_fastapi.sh
+```
+
+3. Run frontend in full Next.js mode.
 
 ```bash
 ./frontend/start-full-next.sh
 ```
 
-## How Scenario Learning Works (LLM + GAM + RL)
+## Documentation
 
-This is the behavior you asked about:
+Start here:
 
-1. Test type labels can stay the same while scenarios change.
-2. `Coverage By Test Type` is category-level (`authentication`, `error_handling`, etc.), not exact scenario payload/name comparison.
+1. `docs/agent-architecture-flow-in-depth.md`
+2. `docs/qa-agent-runtime-step-map.md`
+3. `docs/qa-agent-learning-data-flow.md`
+4. `docs/qa-agent-glass-box-deep-dive.md`
 
-### Runtime flow
+Full docs index: `docs/README.md`
 
-1. LLM creates base scenario candidates from the OpenAPI spec and prompt.
-   - Controlled by `QA_SCENARIO_LLM_MODE` (`auto|on|off`), with heuristic fallback.
-2. GAM (memory/research) enriches the prompt context for scenario generation.
-   - GAM planner/reflection mode is enforced to `on`.
-   - With `OPENAI_API_KEY` set, GAM uses LLM planning/reflection; without key or on call failure it falls back to heuristic behavior.
-   - GAM reflection depth is configurable with `GAM_MAX_REFLECTIONS`.
-3. RL does not fine-tune LLM weights here. RL is used to:
-   - mutate/add candidates
-   - prioritize/select which scenarios execute
-   - update future scoring from reward/penalty history
+## Repository Layout
 
-### Cross-domain safety
+1. `backend/`: FastAPI services, QA runtime, RL/GAM integration, tests
+2. `frontend/`: Next.js customer UI and startup wrappers
+3. `docs/`: architecture, runtime, data flow, and API-flow docs
+4. `data/`: local runtime/test assets
 
-When multiple domains share the same tenant/checkpoint, GAM and RL are spec-scoped:
+## Development
 
-1. Memo retrieval is filtered by current spec tags.
-2. RL scenario stats are filtered by current spec key before prompt focus, mutation, and selection.
-3. Convention guidance remains global by design.
+1. Backend developer guide: `backend/README.md`
+2. Frontend developer guide: `frontend/README.md`
+3. Contribution guide: `CONTRIBUTING.md`
+4. Security policy: `SECURITY.md`
+5. Code of conduct: `CODE_OF_CONDUCT.md`
 
-### Where to verify in JSON report
+## Notes
 
-1. LLM base count: `selection_policy.base_candidate_count`
-2. RL added count: `mutation_policy.mutated_candidates_added`
-3. GAM influence: `gam.research_plan`, `gam.research_excerpt_count`
-   - GAM engine mode: `gam.research_engine.plan_modes`, `gam.research_engine.reflect_modes`
-   - GAM LLM call stats: `gam.research_engine.llm_stats`
-4. Scenario generation engine trace: `prompt_trace.scenario_generation`
-5. Per-scenario reward/penalty: `learning.feedback.decision_signals`
-6. Run-to-run learning deltas: `learning.state_snapshot.improvement_deltas`
-7. RL mutation mix and adaptive generation:
-   - `mutation_policy.mutation_strategy_breakdown`
-   - `mutation_policy.top_targets`
-   - `mutation_policy.applied_examples` (`strategy`, `mutation_budget`, `operation_failure_rate`)
-
-### Where to verify in UI
-
-1. `Scenario Influence Map (LLM vs GAM vs RL)`
-2. `RL Improvement Over Time`
-3. `State-by-State API Output (Glass Box)`
-4. `Executed Scenarios By Source` (LLM base vs RL mutation vs RL history-seed)
-
-### Why coverage can look unchanged
-
-If only scenario internals changed (payload values, auth headers, params, edge variants), category totals can remain similar even though the executed scenario set is different.
+1. Some components are research-oriented and evolve rapidly.
+2. Validate security/compliance requirements before production deployment.

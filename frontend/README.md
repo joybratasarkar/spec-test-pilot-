@@ -1,36 +1,42 @@
-# Frontend
+# Frontend Guide
 
-This folder is the frontend entrypoint layer for the customer UI.
+This directory contains customer UI launch scripts and the Next.js app.
 
-It wraps the existing Next.js app in:
+## Structure
 
-1. `customer-ui-next/`
+1. `customer-ui-next/`: Next.js application
+2. `start-frontend.sh`: split-mode launcher
+3. `start-full-next.sh`: full Next.js mode launcher
+4. `run_customer_ui_next.sh`: mode-aware UI launcher
+5. `run_customer_frontend_next.sh`: frontend launcher for FastAPI split mode
 
-You can run frontend in two modes:
+## Modes
 
-1. Split mode (recommended): Next.js frontend + FastAPI backend
-2. Full Next mode: Next.js with local API routes
+1. `split` mode (recommended): Next.js UI + FastAPI backend
+2. `full_next` mode: Next.js UI + local Next API routes
 
-## Split Mode (recommended)
+## Split Mode
 
 1. Start backend in another terminal:
+
 ```bash
 ./backend/start-backend.sh
 ```
 
 2. Start frontend:
+
 ```bash
 ./frontend/start-frontend.sh
 ```
 
 3. Open:
+
 ```text
 http://localhost:3001
 ```
 
-In this mode, frontend calls FastAPI directly (`http://127.0.0.1:8787` by default).
+Alternative command:
 
-You can also run:
 ```bash
 QA_UI_MODE=split ./frontend/run_customer_ui_next.sh
 ```
@@ -41,22 +47,21 @@ QA_UI_MODE=split ./frontend/run_customer_ui_next.sh
 ./frontend/start-full-next.sh
 ```
 
-or:
+Alternative command:
+
 ```bash
 QA_UI_MODE=full_next ./frontend/run_customer_ui_next.sh
 ```
 
-This runs Next.js UI with its own Node API routes.
+## UI Capabilities
 
-Use the UI header badge to verify runtime connection:
+1. Trigger single or multi-domain QA jobs
+2. Stream live execution logs
+3. Inspect JSON/Markdown reports
+4. Review generated test scripts
+5. Inspect RL/GAM diagnostics and selection traces
 
-1. `probe=ok:fastapi` means split mode is connected correctly.
-2. `probe=ok:next_proxy_local` means full-next local mode.
+## Related Docs
 
-## What customer can do in UI
-
-1. Select domains and run QA jobs
-2. View live progress/logs
-3. View JSON/Markdown reports
-4. View generated test scripts (pytest/jest/curl/restassured)
-5. Inspect RL counters and selection diagnostics
+1. `frontend/customer-ui-next/README.md`
+2. `docs/customer-ui-api-flow.md`

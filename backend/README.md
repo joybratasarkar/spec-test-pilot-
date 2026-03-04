@@ -1,88 +1,89 @@
-# Backend
+# Backend Guide
 
-This folder is the backend entrypoint layer for the QA agent system.
+This directory contains the QA runtime, API services, and learning components.
 
-Backend runtime code is now physically located in this folder:
+## Key Components
 
-1. FastAPI app: `qa_customer_api.py`
-2. Domain runner: `run_qa_domain.sh`
-3. QA agent core: `spec_test_pilot/qa_specialist_agent.py`
-4. RL trainer: `spec_test_pilot/agent_lightning_v2.py`
+1. `qa_customer_api.py`: customer-facing FastAPI job API
+2. `qa_agent_runner.py`: domain execution entrypoint
+3. `spec_test_pilot/qa_specialist_agent.py`: core orchestration pipeline
+4. `spec_test_pilot/agent_lightning_v2.py`: RL training runtime
+5. `spec_test_pilot/memory/gam.py`: GAM memory and research layer
 
-## Start FastAPI backend
+## Setup
 
-1. Create backend venv (first time):
 ```bash
 python3 -m venv backend/.venv
 backend/.venv/bin/pip install -r backend/requirements.txt
 ```
 
-2. Start backend:
+## Run Backend API
+
 ```bash
 ./backend/start-backend.sh
 ```
 
-Default:
+Default endpoint:
 
-1. host: `127.0.0.1`
-2. port: `8787`
-
-## Run one domain from backend
-
-```bash
-./backend/run-domain.sh --domain ecommerce --customer-mode --verify-persistence
+```text
+http://127.0.0.1:8787
 ```
 
-This writes:
+## Run QA Agent (CLI)
 
-1. generated test scripts
-2. `qa_execution_report.json`
-3. `qa_execution_report.md`
-4. RL checkpoint (if provided)
+Recommended mode:
 
-## Memory + RL Scope (Important)
+```bash
+./backend/run_qa_domain.sh --domain ecommerce --customer-mode --verify-persistence
+```
 
-GAM memory retrieval and RL scenario history are now scoped per OpenAPI spec:
+Advanced mode:
 
-1. `scenario_stats` are filtered to the current spec before mutation/selection/prompt focus.
-2. GAM memo pages (`spec_context`, `rl_signal`) are tagged with a spec scope key.
-3. Research retrieval keeps conventions globally, but filters memo pages to current spec tags.
+```bash
+./backend/run_qa_domain.sh \
+  --domain ecommerce \
+  --action both \
+  --output-dir /tmp/qa_ecommerce_run \
+  --rl-checkpoint /tmp/agent_lightning_ecommerce.pt
+```
 
-This prevents cross-domain leakage like `/orders/...` signals appearing while running a `/shipments/...` spec under the same tenant/checkpoint.
-
-Paper-aligned GAM deep-research fields are now exposed in report JSON:
-
-1. `gam.research_info_checks` (`request_status`, `missing`, `next_request`)
-2. `gam.research_retrieval_trace` (iteration plan + retrieval tool usage summary)
-3. `gam.research_iterations`
-4. `gam.research_engine` (planner/reflector mode + LLM stats)
-
-## Backend APIs (customer UI)
+## Backend API Endpoints
 
 Base URL: `http://127.0.0.1:8787`
 
-1. `POST /api/jobs` - create run job
-2. `GET /api/jobs` - list jobs
-3. `GET /api/jobs/{job_id}` - job snapshot
-4. `GET /api/jobs/{job_id}/events` - SSE stream
-5. `GET /api/jobs/{job_id}/report/{domain}?format=json|md` - reports
-6. `GET /api/jobs/{job_id}/generated-tests/{domain}` - generated files
-7. `GET /api/jobs/{job_id}/generated-tests/{domain}/{kind}` - script content
+1. `POST /api/jobs`: create a QA job
+2. `GET /api/jobs`: list jobs
+3. `GET /api/jobs/{job_id}`: job snapshot
+4. `GET /api/jobs/{job_id}/events`: SSE events
+5. `GET /api/jobs/{job_id}/report/{domain}?format=json|md`: run reports
+6. `GET /api/jobs/{job_id}/generated-tests/{domain}`: generated files
+7. `GET /api/jobs/{job_id}/generated-tests/{domain}/{kind}`: script content
 
-## Useful Environment Variables
+## Important Environment Variables
 
 1. `BACKEND_HOST`
 2. `BACKEND_PORT`
-3. `QA_UI_ALLOWED_ORIGINS`
-4. `BACKEND_RELOAD` (`1` to enable uvicorn reload)
-5. `OPENAI_API_KEY` (required for active GAM LLM calls)
-6. `GAM_LLM_MODE` is enforced to `on` by runtime/scripts
-7. `GAM_MEMO_LLM_MODE` is enforced to `on` by runtime/scripts
-8. `GAM_OPENAI_MODEL` (default `gpt-4.1-mini`)
-9. `GAM_LLM_TIMEOUT_SECONDS` (default `12`)
-10. `GAM_MAX_REFLECTIONS` (default `2`, bounded `1..8`)
-11. `GAM_MEMO_OPENAI_MODEL` (default inherits `GAM_OPENAI_MODEL`)
-12. `QA_SCENARIO_LLM_MODE` (`auto`|`on`|`off`, default `auto`)
-13. `QA_SCENARIO_LLM_MODEL` (default `gpt-4.1-mini`)
-14. `QA_SCENARIO_LLM_TIMEOUT_SECONDS` (library default `20`, domain runner default `45`)
-15. `QA_SCENARIO_LLM_MAX_RETRIES` (library default `1`, domain runner default `1`)
+3. `BACKEND_RELOAD`
+4. `QA_UI_ALLOWED_ORIGINS`
+5. `OPENAI_API_KEY`
+6. `QA_SCENARIO_LLM_MODE` (`auto|on|off`)
+7. `QA_SCENARIO_LLM_MODEL`
+8. `QA_SCENARIO_LLM_TIMEOUT_SECONDS`
+9. `GAM_LLM_MODE`
+10. `GAM_MEMO_LLM_MODE`
+11. `GAM_OPENAI_MODEL`
+12. `GAM_MAX_REFLECTIONS`
+
+## Testing
+
+Run backend tests:
+
+```bash
+backend/.venv/bin/pytest backend/tests -q
+```
+
+## Related Docs
+
+1. `docs/agent-architecture-flow-in-depth.md`
+2. `docs/qa-agent-learning-data-flow.md`
+3. `docs/customer-ui-api-flow.md`

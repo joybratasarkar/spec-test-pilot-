@@ -1325,7 +1325,7 @@ export default function HomePage() {
       <header className="header">
         <div className="header-row">
           <div>
-            <h1>SpecTestPilot QA Workspace</h1>
+            <h1>SpecForge QA Workspace</h1>
             <p className="header-subtitle">Run QA agent, review scripts, inspect tested cases, and deliver reports.</p>
           </div>
           <div className="header-badges">
