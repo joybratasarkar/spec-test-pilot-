@@ -30,6 +30,12 @@ if [[ -f "${ENV_FILE}" ]]; then
   set +a
 fi
 
+# RL training is periodic-only in customer mode. Keep it enabled on restart.
+QA_RL_PERIODIC_ENABLED="1"
+QA_RL_PERIODIC_INTERVAL_SEC="${QA_RL_PERIODIC_INTERVAL_SEC:-300}"
+QA_RL_PERIODIC_MAX_STEPS="${QA_RL_PERIODIC_MAX_STEPS:-25}"
+QA_RL_PERIODIC_MIN_BUFFER="${QA_RL_PERIODIC_MIN_BUFFER:-32}"
+
 cd "${ROOT_DIR}"
 
 if [[ -x "${ROOT_DIR}/.venv/bin/python" ]]; then
@@ -47,6 +53,10 @@ echo "[CFG] QA_UI_ALLOWED_ORIGINS=${ALLOWED_ORIGINS}"
 echo "[CFG] BACKEND_RELOAD=${BACKEND_RELOAD}"
 echo "[CFG] GAM_LLM_MODE=${GAM_LLM_MODE} (enforced)"
 echo "[CFG] GAM_MEMO_LLM_MODE=${GAM_MEMO_LLM_MODE} (enforced)"
+echo "[CFG] QA_RL_PERIODIC_ENABLED=${QA_RL_PERIODIC_ENABLED} (enforced)"
+echo "[CFG] QA_RL_PERIODIC_INTERVAL_SEC=${QA_RL_PERIODIC_INTERVAL_SEC}"
+echo "[CFG] QA_RL_PERIODIC_MAX_STEPS=${QA_RL_PERIODIC_MAX_STEPS}"
+echo "[CFG] QA_RL_PERIODIC_MIN_BUFFER=${QA_RL_PERIODIC_MIN_BUFFER}"
 if [[ -n "${OPENAI_API_KEY:-}" ]]; then
   echo "[CFG] OPENAI_API_KEY=loaded_from_env"
 else
@@ -56,6 +66,10 @@ fi
 export QA_UI_ALLOWED_ORIGINS="${ALLOWED_ORIGINS}"
 export GAM_LLM_MODE="${GAM_LLM_MODE}"
 export GAM_MEMO_LLM_MODE="${GAM_MEMO_LLM_MODE}"
+export QA_RL_PERIODIC_ENABLED="${QA_RL_PERIODIC_ENABLED}"
+export QA_RL_PERIODIC_INTERVAL_SEC="${QA_RL_PERIODIC_INTERVAL_SEC}"
+export QA_RL_PERIODIC_MAX_STEPS="${QA_RL_PERIODIC_MAX_STEPS}"
+export QA_RL_PERIODIC_MIN_BUFFER="${QA_RL_PERIODIC_MIN_BUFFER}"
 if [[ "${BACKEND_RELOAD}" == "1" ]]; then
   exec "${PYTHON_BIN}" -m uvicorn qa_customer_api:app --host "${BACKEND_HOST}" --port "${BACKEND_PORT}" --reload
 else

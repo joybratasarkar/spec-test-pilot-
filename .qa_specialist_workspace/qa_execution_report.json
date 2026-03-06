@@ -1,0 +1,5339 @@
+{
+  "metadata": {
+    "run_id": "c65b1d6e310b4d00b8dd72bcf6558968",
+    "spec_path": "/Users/sjoybrata/.spec_test_pilot/customer_default/ecommerce/openapi_ecommerce.yaml",
+    "spec_title": "E-commerce API",
+    "spec_version": "1.0.0",
+    "tenant_id": "customer_default",
+    "workspace_id": "customer_default",
+    "spec_key": "spec_c3ebc1397f69182e",
+    "generated_at": "2026-03-05 10:49:32",
+    "execution_seconds": 49.137,
+    "isolation_mode": "live_http_base_url",
+    "environment_profile": "staging",
+    "stage_metrics_ms": {
+      "stage_1_spec_intelligence": 3.508,
+      "stage_2_gam_memory_research": 8285.375,
+      "stage_3_scenario_generation": 39701.74,
+      "stage_4_mutation_selection": 38.025,
+      "stage_6_execute_verify": 50.059,
+      "stage_7_reward_training": 8.673,
+      "stage_8_reporting_rl": 29.433
+    },
+    "runtime_caps": {
+      "max_scenarios": 16,
+      "max_runtime_sec": null,
+      "llm_token_cap": null
+    },
+    "script_kind": "python_pytest",
+    "llm_scenario_debug_log": "/Users/sjoybrata/Desktop/reinforcement-agent/.qa_specialist_workspace/llm_scenario_debug.jsonl",
+    "llm_generation_degraded": false,
+    "llm_generation_degraded_reason": ""
+  },
+  "summary": {
+    "total_scenarios": 16,
+    "passed_scenarios": 0,
+    "failed_scenarios": 16,
+    "hard_failed_scenarios": 16,
+    "suspect_scenarios": 0,
+    "blocked_scenarios": 0,
+    "pass_rate": 0.0,
+    "true_pass_rate": 0.0,
+    "pass_threshold": 0.7,
+    "meets_quality_gate": false,
+    "quality_gate_fail_reasons": [
+      "pass_rate_below_threshold"
+    ],
+    "quality_gate_warnings": [],
+    "llm_degradation_policy": {
+      "llm_mode": "auto",
+      "degraded": false,
+      "gate_blocking": false,
+      "gate_reason": "none",
+      "fallback_quality_ok": false,
+      "pass_rate_ok": false,
+      "happy_path_coverage_complete": true,
+      "required_operation_count": 4,
+      "happy_path_operation_count": 4,
+      "scenario_count": 16
+    },
+    "average_duration_ms": 0.675,
+    "contract_checks_run": 16,
+    "contract_check_failures": 0,
+    "corrected_expectations": 0,
+    "detected_endpoints": 4,
+    "scenario_count_generated": 16,
+    "runtime_cap_hit": false,
+    "runtime_skipped_scenarios": 0,
+    "unsafe_actions_blocked": 0,
+    "max_runtime_sec": null,
+    "environment_profile": "staging",
+    "test_type_breakdown": {
+      "happy_path": {
+        "total": 6,
+        "passed": 0,
+        "failed": 6,
+        "suspect": 0,
+        "blocked": 0
+      },
+      "authentication": {
+        "total": 3,
+        "passed": 0,
+        "failed": 3,
+        "suspect": 0,
+        "blocked": 0
+      },
+      "input_validation": {
+        "total": 1,
+        "passed": 0,
+        "failed": 1,
+        "suspect": 0,
+        "blocked": 0
+      },
+      "error_handling": {
+        "total": 2,
+        "passed": 0,
+        "failed": 2,
+        "suspect": 0,
+        "blocked": 0
+      },
+      "boundary_testing": {
+        "total": 2,
+        "passed": 0,
+        "failed": 2,
+        "suspect": 0,
+        "blocked": 0
+      },
+      "performance": {
+        "total": 1,
+        "passed": 0,
+        "failed": 1,
+        "suspect": 0,
+        "blocked": 0
+      },
+      "security": {
+        "total": 1,
+        "passed": 0,
+        "failed": 1,
+        "suspect": 0,
+        "blocked": 0
+      }
+    },
+    "failed_examples": [
+      {
+        "name": "test_get_orders_orderId_rl_history_seed_happy_path_200",
+        "method": "GET",
+        "endpoint": "/orders/123",
+        "expected_status": 200,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      },
+      {
+        "name": "test_get_products_rl_history_seed_happy_path_200",
+        "method": "GET",
+        "endpoint": "/products",
+        "expected_status": 200,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      },
+      {
+        "name": "test_post_orders_rl_history_seed_happy_path_201",
+        "method": "POST",
+        "endpoint": "/orders",
+        "expected_status": 201,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      },
+      {
+        "name": "test_post_products_rl_history_seed_happy_path_201",
+        "method": "POST",
+        "endpoint": "/products",
+        "expected_status": 201,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      },
+      {
+        "name": "GET /products - Happy Path_rl_missing_auth",
+        "method": "GET",
+        "endpoint": "/products",
+        "expected_status": 401,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      },
+      {
+        "name": "test_post_products_rl_history_seed_input_validation_400",
+        "method": "POST",
+        "endpoint": "/products",
+        "expected_status": 400,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      },
+      {
+        "name": "POST /products - Happy Path_rl_missing_required_name",
+        "method": "POST",
+        "endpoint": "/products",
+        "expected_status": 400,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      },
+      {
+        "name": "POST /orders - Happy Path_rl_learned_below_min_quantity",
+        "method": "POST",
+        "endpoint": "/orders",
+        "expected_status": 400,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      },
+      {
+        "name": "GET /orders/{orderId} - Happy Path",
+        "method": "GET",
+        "endpoint": "/orders/abc123",
+        "expected_status": 200,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      },
+      {
+        "name": "GET /products - Happy Path",
+        "method": "GET",
+        "endpoint": "/products",
+        "expected_status": 200,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      },
+      {
+        "name": "POST /orders - Dependency Failure",
+        "method": "POST",
+        "endpoint": "/orders",
+        "expected_status": 503,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      },
+      {
+        "name": "GET /products - Performance Test",
+        "method": "GET",
+        "endpoint": "/products",
+        "expected_status": 200,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      },
+      {
+        "name": "GET /products - Boundary Test Large Page Size",
+        "method": "GET",
+        "endpoint": "/products",
+        "expected_status": 401,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      },
+      {
+        "name": "GET /products - Boundary Test Large Page Size_rl_missing_auth",
+        "method": "GET",
+        "endpoint": "/products",
+        "expected_status": 401,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      },
+      {
+        "name": "test_get_products_rl_history_seed_authentication_401",
+        "method": "GET",
+        "endpoint": "/products",
+        "expected_status": 401,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      },
+      {
+        "name": "GET /products - Happy Path_rl_query_fuzz",
+        "method": "GET",
+        "endpoint": "/products",
+        "expected_status": 400,
+        "actual_status": 404,
+        "verdict": "fail",
+        "error": ""
+      }
+    ]
+  },
+  "learning": {
+    "feedback": {
+      "run_reward": 0.6228,
+      "reward_breakdown": {
+        "pass_rate_component": 0.0,
+        "coverage_component": 0.1,
+        "decision_quality_component": 0.13,
+        "informative_failure_component": 0.15,
+        "novelty_component": 0.1029,
+        "reproducible_failure_component": 0.14,
+        "latency_penalty_component": -0.0,
+        "redundancy_penalty_component": -0.0,
+        "unsafe_action_penalty_component": -0.0,
+        "environment_weight_multiplier": 1.0
+      },
+      "average_decision_reward": -0.0001,
+      "decision_quality_score": 0.5,
+      "informative_failure_ratio": 0.5,
+      "novelty_ratio": 0.875,
+      "redundancy_ratio": 0.0,
+      "reproducible_failure_ratio": 1.0,
+      "unsafe_action_ratio": 0.0,
+      "penalized_decisions": 8,
+      "rewarded_decisions": 8,
+      "decision_signals": [
+        {
+          "name": "test_get_orders_orderId_rl_history_seed_happy_path_200",
+          "test_type": "happy_path",
+          "method": "GET",
+          "endpoint_template": "/orders/{orderId}",
+          "endpoint_key": "GET /orders/{orderId}",
+          "scenario_fingerprint": "GET|/orders/{orderId}|happy_path|200|body=0|params=1|mut=history_seed",
+          "has_body": false,
+          "has_params": true,
+          "reward": -1.1004596,
+          "passed": false,
+          "expected_status": 200,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        },
+        {
+          "name": "test_get_products_rl_history_seed_happy_path_200",
+          "test_type": "happy_path",
+          "method": "GET",
+          "endpoint_template": "/products",
+          "endpoint_key": "GET /products",
+          "scenario_fingerprint": "GET|/products|happy_path|200|body=0|params=0|mut=history_seed",
+          "has_body": false,
+          "has_params": false,
+          "reward": -1.1001682000000002,
+          "passed": false,
+          "expected_status": 200,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        },
+        {
+          "name": "test_post_orders_rl_history_seed_happy_path_201",
+          "test_type": "happy_path",
+          "method": "POST",
+          "endpoint_template": "/orders",
+          "endpoint_key": "POST /orders",
+          "scenario_fingerprint": "POST|/orders|happy_path|201|body=1|params=0|mut=history_seed",
+          "has_body": true,
+          "has_params": false,
+          "reward": -1.1001362000000001,
+          "passed": false,
+          "expected_status": 201,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        },
+        {
+          "name": "test_post_products_rl_history_seed_happy_path_201",
+          "test_type": "happy_path",
+          "method": "POST",
+          "endpoint_template": "/products",
+          "endpoint_key": "POST /products",
+          "scenario_fingerprint": "POST|/products|happy_path|201|body=1|params=0|mut=history_seed",
+          "has_body": true,
+          "has_params": false,
+          "reward": -1.1001212,
+          "passed": false,
+          "expected_status": 201,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        },
+        {
+          "name": "GET /products - Happy Path_rl_missing_auth",
+          "test_type": "authentication",
+          "method": "GET",
+          "endpoint_template": "/products",
+          "endpoint_key": "GET /products",
+          "scenario_fingerprint": "GET|/products|authentication|401|body=0|params=0|mut=missing_auth",
+          "has_body": false,
+          "has_params": false,
+          "reward": 1.0998864,
+          "passed": false,
+          "expected_status": 401,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        },
+        {
+          "name": "test_post_products_rl_history_seed_input_validation_400",
+          "test_type": "input_validation",
+          "method": "POST",
+          "endpoint_template": "/products",
+          "endpoint_key": "POST /products",
+          "scenario_fingerprint": "POST|/products|input_validation|400|body=0|params=0|mut=history_seed",
+          "has_body": false,
+          "has_params": false,
+          "reward": 1.0998876,
+          "passed": false,
+          "expected_status": 400,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        },
+        {
+          "name": "POST /products - Happy Path_rl_missing_required_name",
+          "test_type": "error_handling",
+          "method": "POST",
+          "endpoint_template": "/products",
+          "endpoint_key": "POST /products",
+          "scenario_fingerprint": "POST|/products|error_handling|400|body=1|params=0|mut=missing_required_field",
+          "has_body": true,
+          "has_params": false,
+          "reward": 1.0998921999999998,
+          "passed": false,
+          "expected_status": 400,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        },
+        {
+          "name": "POST /orders - Happy Path_rl_learned_below_min_quantity",
+          "test_type": "boundary_testing",
+          "method": "POST",
+          "endpoint_template": "/orders",
+          "endpoint_key": "POST /orders",
+          "scenario_fingerprint": "POST|/orders|boundary_testing|400|body=1|params=0|mut=learned_numeric_underflow",
+          "has_body": true,
+          "has_params": false,
+          "reward": 1.0998845999999998,
+          "passed": false,
+          "expected_status": 400,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        },
+        {
+          "name": "GET /orders/{orderId} - Happy Path",
+          "test_type": "happy_path",
+          "method": "GET",
+          "endpoint_template": "/orders/{orderId}",
+          "endpoint_key": "GET /orders/{orderId}",
+          "scenario_fingerprint": "GET|/orders/{orderId}|happy_path|200|body=0|params=1",
+          "has_body": false,
+          "has_params": true,
+          "reward": -1.1001024000000001,
+          "passed": false,
+          "expected_status": 200,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        },
+        {
+          "name": "GET /products - Happy Path",
+          "test_type": "happy_path",
+          "method": "GET",
+          "endpoint_template": "/products",
+          "endpoint_key": "GET /products",
+          "scenario_fingerprint": "GET|/products|happy_path|200|body=0|params=0",
+          "has_body": false,
+          "has_params": false,
+          "reward": -1.1000986000000001,
+          "passed": false,
+          "expected_status": 200,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        },
+        {
+          "name": "POST /orders - Dependency Failure",
+          "test_type": "error_handling",
+          "method": "POST",
+          "endpoint_template": "/orders",
+          "endpoint_key": "POST /orders",
+          "scenario_fingerprint": "POST|/orders|error_handling|503|body=1|params=0",
+          "has_body": true,
+          "has_params": false,
+          "reward": -1.1001018,
+          "passed": false,
+          "expected_status": 503,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        },
+        {
+          "name": "GET /products - Performance Test",
+          "test_type": "performance",
+          "method": "GET",
+          "endpoint_template": "/products",
+          "endpoint_key": "GET /products",
+          "scenario_fingerprint": "GET|/products|performance|200|body=0|params=0",
+          "has_body": false,
+          "has_params": false,
+          "reward": -1.1000960000000002,
+          "passed": false,
+          "expected_status": 200,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        },
+        {
+          "name": "GET /products - Boundary Test Large Page Size",
+          "test_type": "boundary_testing",
+          "method": "GET",
+          "endpoint_template": "/products",
+          "endpoint_key": "GET /products",
+          "scenario_fingerprint": "GET|/products|boundary_testing|401|body=0|params=1",
+          "has_body": false,
+          "has_params": true,
+          "reward": 1.0998847999999999,
+          "passed": false,
+          "expected_status": 401,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        },
+        {
+          "name": "GET /products - Boundary Test Large Page Size_rl_missing_auth",
+          "test_type": "authentication",
+          "method": "GET",
+          "endpoint_template": "/products",
+          "endpoint_key": "GET /products",
+          "scenario_fingerprint": "GET|/products|authentication|401|body=0|params=1|mut=missing_auth",
+          "has_body": false,
+          "has_params": true,
+          "reward": 1.0998945999999998,
+          "passed": false,
+          "expected_status": 401,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        },
+        {
+          "name": "test_get_products_rl_history_seed_authentication_401",
+          "test_type": "authentication",
+          "method": "GET",
+          "endpoint_template": "/products",
+          "endpoint_key": "GET /products",
+          "scenario_fingerprint": "GET|/products|authentication|401|body=0|params=1|mut=history_seed",
+          "has_body": false,
+          "has_params": true,
+          "reward": 1.099894,
+          "passed": false,
+          "expected_status": 401,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        },
+        {
+          "name": "GET /products - Happy Path_rl_query_fuzz",
+          "test_type": "security",
+          "method": "GET",
+          "endpoint_template": "/products",
+          "endpoint_key": "GET /products",
+          "scenario_fingerprint": "GET|/products|security|400|body=0|params=1|mut=query_fuzz",
+          "has_body": false,
+          "has_params": true,
+          "reward": 1.0998983999999998,
+          "passed": false,
+          "expected_status": 400,
+          "actual_status": 404,
+          "corrected_expectation": false,
+          "contract_valid": true
+        }
+      ]
+    },
+    "state_snapshot": {
+      "run_count": 3,
+      "spec_scope_key": "spec_c3ebc1397f69182e",
+      "top_test_type_weights": [
+        [
+          "happy_path",
+          4.0804364
+        ],
+        [
+          "performance",
+          1.2200192
+        ],
+        [
+          "integration",
+          1.000013
+        ],
+        [
+          "error_handling",
+          0.42002036000000004
+        ],
+        [
+          "security",
+          0.34004600000000007
+        ],
+        [
+          "authentication",
+          0.2
+        ],
+        [
+          "input_validation",
+          0.2
+        ],
+        [
+          "boundary_testing",
+          0.2
+        ]
+      ],
+      "top_endpoint_weights": [
+        [
+          "GET /orders/{orderId}",
+          1.4402848400000003
+        ],
+        [
+          "DELETE /products",
+          0.78000628
+        ],
+        [
+          "DELETE /orders/{orderId}",
+          0.78000608
+        ],
+        [
+          "DELETE /orders",
+          0.5900168000000001
+        ],
+        [
+          "GET /products",
+          0.56022916
+        ],
+        [
+          "POST /orders",
+          0.5601372800000004
+        ],
+        [
+          "POST /products",
+          0.2
+        ]
+      ],
+      "decision_history_size": 3,
+      "decision_history_tail": [
+        {
+          "timestamp": "2026-03-05T05:14:56.505101Z",
+          "run_reward": 0.5957,
+          "average_decision_reward": 0.4124,
+          "rewarded_decisions": 11,
+          "penalized_decisions": 5
+        },
+        {
+          "timestamp": "2026-03-05T05:17:38.161719Z",
+          "run_reward": 0.6532,
+          "average_decision_reward": 0.6027,
+          "rewarded_decisions": 14,
+          "penalized_decisions": 4
+        },
+        {
+          "timestamp": "2026-03-05T05:19:31.726100Z",
+          "run_reward": 0.6228,
+          "average_decision_reward": -0.0001,
+          "rewarded_decisions": 8,
+          "penalized_decisions": 8
+        }
+      ],
+      "latest_run_metrics": {
+        "timestamp": "2026-03-05T05:19:31.726100Z",
+        "run_reward": 0.6228,
+        "average_decision_reward": -0.0001,
+        "rewarded_decisions": 8,
+        "penalized_decisions": 8
+      },
+      "previous_run_metrics": {
+        "timestamp": "2026-03-05T05:17:38.161719Z",
+        "run_reward": 0.6532,
+        "average_decision_reward": 0.6027,
+        "rewarded_decisions": 14,
+        "penalized_decisions": 4
+      },
+      "improvement_deltas": {
+        "run_reward_delta": -0.0304,
+        "avg_decision_reward_delta": -0.6028,
+        "penalized_decisions_delta": 4,
+        "rewarded_decisions_delta": -6
+      },
+      "policy_feature_dim": 96,
+      "scenario_patterns_tracked": 33,
+      "scenario_patterns_tracked_total": 33,
+      "active_repair_rules": 0,
+      "weakest_patterns": [
+        {
+          "fingerprint": "GET|/orders/{orderId}|happy_path|200|body=0|params=1",
+          "failure_rate": 1.0,
+          "attempts": 6,
+          "avg_reward": -1.100285
+        },
+        {
+          "fingerprint": "GET|/products|happy_path|200|body=0|params=0",
+          "failure_rate": 1.0,
+          "attempts": 6,
+          "avg_reward": -1.100096
+        },
+        {
+          "fingerprint": "POST|/orders|happy_path|201|body=1|params=0",
+          "failure_rate": 1.0,
+          "attempts": 4,
+          "avg_reward": -1.100083
+        },
+        {
+          "fingerprint": "POST|/products|happy_path|201|body=1|params=0",
+          "failure_rate": 1.0,
+          "attempts": 4,
+          "avg_reward": -1.100075
+        },
+        {
+          "fingerprint": "POST|/products|input_validation|400|body=0|params=0",
+          "failure_rate": 1.0,
+          "attempts": 4,
+          "avg_reward": 1.099936
+        },
+        {
+          "fingerprint": "POST|/orders|boundary_testing|400|body=1|params=0",
+          "failure_rate": 1.0,
+          "attempts": 4,
+          "avg_reward": 1.099934
+        },
+        {
+          "fingerprint": "POST|/orders|authentication|401|body=0|params=0",
+          "failure_rate": 1.0,
+          "attempts": 4,
+          "avg_reward": 1.09995425
+        },
+        {
+          "fingerprint": "POST|/products|input_validation|400|body=1|params=0",
+          "failure_rate": 1.0,
+          "attempts": 4,
+          "avg_reward": 1.0999465000000002
+        }
+      ]
+    },
+    "state_file": "/Users/sjoybrata/Desktop/reinforcement-agent/.qa_specialist_workspace/agent_lightning_checkpoint_learning_state.json",
+    "agent_lightning_checkpoint": "/Users/sjoybrata/Desktop/reinforcement-agent/.qa_specialist_workspace/agent_lightning_checkpoint.pt",
+    "learning_delta_status": "regressed",
+    "learning_delta_reason": "weak_pattern_failure_rate_regressed",
+    "policy_movement": {
+      "status": "shifted",
+      "previous_count": 18,
+      "current_count": 16,
+      "retained_count": 7,
+      "added_count": 9,
+      "removed_count": 11,
+      "jaccard_similarity": 0.2593,
+      "turnover_ratio": 0.7407,
+      "added_preview": [
+        "GET|/orders/{orderId}|happy_path|200|body=0|params=1",
+        "GET|/products|authentication|401|body=0|params=0|mut=missing_auth",
+        "GET|/products|authentication|401|body=0|params=1|mut=history_seed",
+        "GET|/products|authentication|401|body=0|params=1|mut=missing_auth",
+        "GET|/products|boundary_testing|401|body=0|params=1",
+        "GET|/products|happy_path|200|body=0|params=0",
+        "GET|/products|performance|200|body=0|params=0",
+        "POST|/orders|error_handling|503|body=1|params=0",
+        "POST|/products|input_validation|400|body=0|params=0|mut=history_seed"
+      ],
+      "removed_preview": [
+        "DELETE|/orders|error_handling|405|body=0|params=0",
+        "POST|/orders|authentication|401|body=0|params=0|mut=invalid_auth",
+        "POST|/products|boundary_testing|400|body=1|params=0|mut=learned_numeric_underflow",
+        "POST|/products|boundary_testing|400|body=1|params=0|mut=learned_string_length_underflow",
+        "POST|/products|error_handling|400|body=1|params=0",
+        "POST|/products|input_validation|400|body=0|params=0|mut=learned_missing_required_field",
+        "POST|/products|input_validation|400|body=1|params=0",
+        "POST|/products|input_validation|400|body=1|params=0|mut=learned_missing_required_field",
+        "POST|/products|input_validation|400|body=1|params=0|mut=learned_required_null",
+        "POST|/products|input_validation|400|body=1|params=0|mut=type_fuzz",
+        "POST|/products|security|400|body=1|params=0"
+      ]
+    }
+  },
+  "selection_policy": {
+    "algorithm": "contextual_linear_ucb",
+    "candidate_count": 61,
+    "base_candidate_count": 20,
+    "mutated_candidate_count": 41,
+    "selected_count": 16,
+    "base_max_scenarios": 16,
+    "effective_budget": 16,
+    "budget_expanded_for_uncertainty": false,
+    "uncertainty_quantile": 0.75,
+    "uncertainty_threshold": 0.48868,
+    "uncertain_candidate_count": 13,
+    "uncertain_selected_count": 6,
+    "novelty_target": 0,
+    "novel_selected_count": 14,
+    "top_decisions": [
+      {
+        "name": "test_get_orders_orderId_rl_history_seed_happy_path_200",
+        "test_type": "happy_path",
+        "endpoint": "GET /orders/{orderId}",
+        "fingerprint": "GET|/orders/{orderId}|happy_path|200|body=0|params=1|mut=history_seed",
+        "selection_reason": "happy_path_coverage",
+        "score": 0.0205,
+        "expected_reward": -0.809,
+        "uncertainty": 0.4384,
+        "exploration_bonus": 0.1534,
+        "failure_focus_bonus": 0.4,
+        "historical_reward": -1.1003,
+        "novelty_bonus": 0.1,
+        "diversity_penalty": 0.0
+      },
+      {
+        "name": "test_get_products_rl_history_seed_happy_path_200",
+        "test_type": "happy_path",
+        "endpoint": "GET /products",
+        "fingerprint": "GET|/products|happy_path|200|body=0|params=0|mut=history_seed",
+        "selection_reason": "happy_path_coverage",
+        "score": 0.1674,
+        "expected_reward": -0.6651,
+        "uncertainty": 0.4472,
+        "exploration_bonus": 0.1565,
+        "failure_focus_bonus": 0.4,
+        "historical_reward": -1.1001,
+        "novelty_bonus": 0.1,
+        "diversity_penalty": 0.0
+      },
+      {
+        "name": "test_post_orders_rl_history_seed_happy_path_201",
+        "test_type": "happy_path",
+        "endpoint": "POST /orders",
+        "fingerprint": "POST|/orders|happy_path|201|body=1|params=0|mut=history_seed",
+        "selection_reason": "happy_path_coverage",
+        "score": 0.142,
+        "expected_reward": -0.6169,
+        "uncertainty": 0.4254,
+        "exploration_bonus": 0.1489,
+        "failure_focus_bonus": 0.4,
+        "historical_reward": -1.1001,
+        "novelty_bonus": 0.1,
+        "diversity_penalty": 0.0
+      },
+      {
+        "name": "test_post_products_rl_history_seed_happy_path_201",
+        "test_type": "happy_path",
+        "endpoint": "POST /products",
+        "fingerprint": "POST|/products|happy_path|201|body=1|params=0|mut=history_seed",
+        "selection_reason": "happy_path_coverage",
+        "score": 0.1085,
+        "expected_reward": -0.6208,
+        "uncertainty": 0.381,
+        "exploration_bonus": 0.1334,
+        "failure_focus_bonus": 0.4,
+        "historical_reward": -1.1001,
+        "novelty_bonus": 0.1,
+        "diversity_penalty": 0.0
+      },
+      {
+        "name": "GET /products - Happy Path_rl_missing_auth",
+        "test_type": "authentication",
+        "endpoint": "GET /products",
+        "fingerprint": "GET|/products|authentication|401|body=0|params=0|mut=missing_auth",
+        "selection_reason": "core_type_coverage",
+        "score": 1.695,
+        "expected_reward": 0.9234,
+        "uncertainty": 0.4329,
+        "exploration_bonus": 0.1515,
+        "failure_focus_bonus": 0.4,
+        "historical_reward": 1.1,
+        "novelty_bonus": 0.1,
+        "diversity_penalty": 0.0
+      },
+      {
+        "name": "test_post_products_rl_history_seed_input_validation_400",
+        "test_type": "input_validation",
+        "endpoint": "POST /products",
+        "fingerprint": "POST|/products|input_validation|400|body=0|params=0|mut=history_seed",
+        "selection_reason": "core_type_coverage",
+        "score": 1.6975,
+        "expected_reward": 1.0187,
+        "uncertainty": 0.3964,
+        "exploration_bonus": 0.1388,
+        "failure_focus_bonus": 0.4,
+        "historical_reward": 1.1,
+        "novelty_bonus": 0.1,
+        "diversity_penalty": 0.0
+      },
+      {
+        "name": "POST /products - Happy Path_rl_missing_required_name",
+        "test_type": "error_handling",
+        "endpoint": "POST /products",
+        "fingerprint": "POST|/products|error_handling|400|body=1|params=0|mut=missing_required_field",
+        "selection_reason": "core_type_coverage",
+        "score": 1.6055,
+        "expected_reward": 0.9322,
+        "uncertainty": 0.3809,
+        "exploration_bonus": 0.1333,
+        "failure_focus_bonus": 0.4,
+        "historical_reward": 1.0999,
+        "novelty_bonus": 0.1,
+        "diversity_penalty": 0.0
+      },
+      {
+        "name": "POST /orders - Happy Path_rl_learned_below_min_quantity",
+        "test_type": "boundary_testing",
+        "endpoint": "POST /orders",
+        "fingerprint": "POST|/orders|boundary_testing|400|body=1|params=0|mut=learned_numeric_underflow",
+        "selection_reason": "core_type_coverage",
+        "score": 1.6284,
+        "expected_reward": 0.9324,
+        "uncertainty": 0.4057,
+        "exploration_bonus": 0.142,
+        "failure_focus_bonus": 0.4,
+        "historical_reward": 1.1,
+        "novelty_bonus": 0.1,
+        "diversity_penalty": 0.0
+      },
+      {
+        "name": "GET /orders/{orderId} - Happy Path",
+        "test_type": "happy_path",
+        "endpoint": "GET /orders/{orderId}",
+        "fingerprint": "GET|/orders/{orderId}|happy_path|200|body=0|params=1",
+        "selection_reason": "forced_weak_replay",
+        "score": -0.0795,
+        "expected_reward": -0.809,
+        "uncertainty": 0.4384,
+        "exploration_bonus": 0.1534,
+        "failure_focus_bonus": 0.4,
+        "historical_reward": -1.1003,
+        "novelty_bonus": 0.0,
+        "diversity_penalty": 0.0
+      },
+      {
+        "name": "GET /products - Happy Path",
+        "test_type": "happy_path",
+        "endpoint": "GET /products",
+        "fingerprint": "GET|/products|happy_path|200|body=0|params=0",
+        "selection_reason": "forced_weak_replay",
+        "score": 0.0674,
+        "expected_reward": -0.6651,
+        "uncertainty": 0.4472,
+        "exploration_bonus": 0.1565,
+        "failure_focus_bonus": 0.4,
+        "historical_reward": -1.1001,
+        "novelty_bonus": 0.0,
+        "diversity_penalty": 0.0
+      },
+      {
+        "name": "POST /orders - Dependency Failure",
+        "test_type": "error_handling",
+        "endpoint": "POST /orders",
+        "fingerprint": "POST|/orders|error_handling|503|body=1|params=0",
+        "selection_reason": "uncertainty_coverage",
+        "score": 0.5542,
+        "expected_reward": 0.3865,
+        "uncertainty": 0.6106,
+        "exploration_bonus": 0.2137,
+        "failure_focus_bonus": 0.0,
+        "historical_reward": 0.0,
+        "novelty_bonus": 0.1,
+        "diversity_penalty": 0.0
+      },
+      {
+        "name": "GET /products - Performance Test",
+        "test_type": "performance",
+        "endpoint": "GET /products",
+        "fingerprint": "GET|/products|performance|200|body=0|params=0",
+        "selection_reason": "uncertainty_coverage",
+        "score": 0.0609,
+        "expected_reward": -0.2471,
+        "uncertainty": 0.5944,
+        "exploration_bonus": 0.208,
+        "failure_focus_bonus": 0.0,
+        "historical_reward": 0.0,
+        "novelty_bonus": 0.1,
+        "diversity_penalty": 0.0
+      },
+      {
+        "name": "GET /products - Boundary Test Large Page Size",
+        "test_type": "boundary_testing",
+        "endpoint": "GET /products",
+        "fingerprint": "GET|/products|boundary_testing|401|body=0|params=1",
+        "selection_reason": "uncertainty_coverage",
+        "score": 1.1755,
+        "expected_reward": 0.7545,
+        "uncertainty": 0.5743,
+        "exploration_bonus": 0.201,
+        "failure_focus_bonus": 0.0,
+        "historical_reward": 0.0,
+        "novelty_bonus": 0.1,
+        "diversity_penalty": 0.0
+      },
+      {
+        "name": "GET /products - Boundary Test Large Page Size_rl_missing_auth",
+        "test_type": "authentication",
+        "endpoint": "GET /products",
+        "fingerprint": "GET|/products|authentication|401|body=0|params=1|mut=missing_auth",
+        "selection_reason": "uncertainty_coverage",
+        "score": 1.6093,
+        "expected_reward": 0.7937,
+        "uncertainty": 0.5587,
+        "exploration_bonus": 0.1955,
+        "failure_focus_bonus": 0.4,
+        "historical_reward": 1.0999,
+        "novelty_bonus": 0.1,
+        "diversity_penalty": 0.0
+      },
+      {
+        "name": "test_get_products_rl_history_seed_authentication_401",
+        "test_type": "authentication",
+        "endpoint": "GET /products",
+        "fingerprint": "GET|/products|authentication|401|body=0|params=1|mut=history_seed",
+        "selection_reason": "uncertainty_coverage",
+        "score": 1.6093,
+        "expected_reward": 0.7937,
+        "uncertainty": 0.5587,
+        "exploration_bonus": 0.1955,
+        "failure_focus_bonus": 0.4,
+        "historical_reward": 1.0999,
+        "novelty_bonus": 0.1,
+        "diversity_penalty": 0.0
+      },
+      {
+        "name": "GET /products - Happy Path_rl_query_fuzz",
+        "test_type": "security",
+        "endpoint": "GET /products",
+        "fingerprint": "GET|/products|security|400|body=0|params=1|mut=query_fuzz",
+        "selection_reason": "uncertainty_coverage",
+        "score": 1.1842,
+        "expected_reward": 0.7384,
+        "uncertainty": 0.5423,
+        "exploration_bonus": 0.1898,
+        "failure_focus_bonus": 0.0,
+        "historical_reward": 0.0,
+        "novelty_bonus": 0.1,
+        "diversity_penalty": 0.0
+      }
+    ]
+  },
+  "selection_decision_trace": [
+    {
+      "name": "test_get_orders_orderId_rl_history_seed_happy_path_200",
+      "test_type": "happy_path",
+      "endpoint": "GET /orders/{orderId}",
+      "fingerprint": "GET|/orders/{orderId}|happy_path|200|body=0|params=1|mut=history_seed",
+      "selection_reason": "happy_path_coverage",
+      "score": 0.0205,
+      "expected_reward": -0.809,
+      "uncertainty": 0.4384,
+      "exploration_bonus": 0.1534,
+      "failure_focus_bonus": 0.4,
+      "historical_reward": -1.1003,
+      "novelty_bonus": 0.1,
+      "diversity_penalty": 0.0
+    },
+    {
+      "name": "test_get_products_rl_history_seed_happy_path_200",
+      "test_type": "happy_path",
+      "endpoint": "GET /products",
+      "fingerprint": "GET|/products|happy_path|200|body=0|params=0|mut=history_seed",
+      "selection_reason": "happy_path_coverage",
+      "score": 0.1674,
+      "expected_reward": -0.6651,
+      "uncertainty": 0.4472,
+      "exploration_bonus": 0.1565,
+      "failure_focus_bonus": 0.4,
+      "historical_reward": -1.1001,
+      "novelty_bonus": 0.1,
+      "diversity_penalty": 0.0
+    },
+    {
+      "name": "test_post_orders_rl_history_seed_happy_path_201",
+      "test_type": "happy_path",
+      "endpoint": "POST /orders",
+      "fingerprint": "POST|/orders|happy_path|201|body=1|params=0|mut=history_seed",
+      "selection_reason": "happy_path_coverage",
+      "score": 0.142,
+      "expected_reward": -0.6169,
+      "uncertainty": 0.4254,
+      "exploration_bonus": 0.1489,
+      "failure_focus_bonus": 0.4,
+      "historical_reward": -1.1001,
+      "novelty_bonus": 0.1,
+      "diversity_penalty": 0.0
+    },
+    {
+      "name": "test_post_products_rl_history_seed_happy_path_201",
+      "test_type": "happy_path",
+      "endpoint": "POST /products",
+      "fingerprint": "POST|/products|happy_path|201|body=1|params=0|mut=history_seed",
+      "selection_reason": "happy_path_coverage",
+      "score": 0.1085,
+      "expected_reward": -0.6208,
+      "uncertainty": 0.381,
+      "exploration_bonus": 0.1334,
+      "failure_focus_bonus": 0.4,
+      "historical_reward": -1.1001,
+      "novelty_bonus": 0.1,
+      "diversity_penalty": 0.0
+    },
+    {
+      "name": "GET /products - Happy Path_rl_missing_auth",
+      "test_type": "authentication",
+      "endpoint": "GET /products",
+      "fingerprint": "GET|/products|authentication|401|body=0|params=0|mut=missing_auth",
+      "selection_reason": "core_type_coverage",
+      "score": 1.695,
+      "expected_reward": 0.9234,
+      "uncertainty": 0.4329,
+      "exploration_bonus": 0.1515,
+      "failure_focus_bonus": 0.4,
+      "historical_reward": 1.1,
+      "novelty_bonus": 0.1,
+      "diversity_penalty": 0.0
+    },
+    {
+      "name": "test_post_products_rl_history_seed_input_validation_400",
+      "test_type": "input_validation",
+      "endpoint": "POST /products",
+      "fingerprint": "POST|/products|input_validation|400|body=0|params=0|mut=history_seed",
+      "selection_reason": "core_type_coverage",
+      "score": 1.6975,
+      "expected_reward": 1.0187,
+      "uncertainty": 0.3964,
+      "exploration_bonus": 0.1388,
+      "failure_focus_bonus": 0.4,
+      "historical_reward": 1.1,
+      "novelty_bonus": 0.1,
+      "diversity_penalty": 0.0
+    },
+    {
+      "name": "POST /products - Happy Path_rl_missing_required_name",
+      "test_type": "error_handling",
+      "endpoint": "POST /products",
+      "fingerprint": "POST|/products|error_handling|400|body=1|params=0|mut=missing_required_field",
+      "selection_reason": "core_type_coverage",
+      "score": 1.6055,
+      "expected_reward": 0.9322,
+      "uncertainty": 0.3809,
+      "exploration_bonus": 0.1333,
+      "failure_focus_bonus": 0.4,
+      "historical_reward": 1.0999,
+      "novelty_bonus": 0.1,
+      "diversity_penalty": 0.0
+    },
+    {
+      "name": "POST /orders - Happy Path_rl_learned_below_min_quantity",
+      "test_type": "boundary_testing",
+      "endpoint": "POST /orders",
+      "fingerprint": "POST|/orders|boundary_testing|400|body=1|params=0|mut=learned_numeric_underflow",
+      "selection_reason": "core_type_coverage",
+      "score": 1.6284,
+      "expected_reward": 0.9324,
+      "uncertainty": 0.4057,
+      "exploration_bonus": 0.142,
+      "failure_focus_bonus": 0.4,
+      "historical_reward": 1.1,
+      "novelty_bonus": 0.1,
+      "diversity_penalty": 0.0
+    },
+    {
+      "name": "GET /orders/{orderId} - Happy Path",
+      "test_type": "happy_path",
+      "endpoint": "GET /orders/{orderId}",
+      "fingerprint": "GET|/orders/{orderId}|happy_path|200|body=0|params=1",
+      "selection_reason": "forced_weak_replay",
+      "score": -0.0795,
+      "expected_reward": -0.809,
+      "uncertainty": 0.4384,
+      "exploration_bonus": 0.1534,
+      "failure_focus_bonus": 0.4,
+      "historical_reward": -1.1003,
+      "novelty_bonus": 0.0,
+      "diversity_penalty": 0.0
+    },
+    {
+      "name": "GET /products - Happy Path",
+      "test_type": "happy_path",
+      "endpoint": "GET /products",
+      "fingerprint": "GET|/products|happy_path|200|body=0|params=0",
+      "selection_reason": "forced_weak_replay",
+      "score": 0.0674,
+      "expected_reward": -0.6651,
+      "uncertainty": 0.4472,
+      "exploration_bonus": 0.1565,
+      "failure_focus_bonus": 0.4,
+      "historical_reward": -1.1001,
+      "novelty_bonus": 0.0,
+      "diversity_penalty": 0.0
+    },
+    {
+      "name": "POST /orders - Dependency Failure",
+      "test_type": "error_handling",
+      "endpoint": "POST /orders",
+      "fingerprint": "POST|/orders|error_handling|503|body=1|params=0",
+      "selection_reason": "uncertainty_coverage",
+      "score": 0.5542,
+      "expected_reward": 0.3865,
+      "uncertainty": 0.6106,
+      "exploration_bonus": 0.2137,
+      "failure_focus_bonus": 0.0,
+      "historical_reward": 0.0,
+      "novelty_bonus": 0.1,
+      "diversity_penalty": 0.0
+    },
+    {
+      "name": "GET /products - Performance Test",
+      "test_type": "performance",
+      "endpoint": "GET /products",
+      "fingerprint": "GET|/products|performance|200|body=0|params=0",
+      "selection_reason": "uncertainty_coverage",
+      "score": 0.0609,
+      "expected_reward": -0.2471,
+      "uncertainty": 0.5944,
+      "exploration_bonus": 0.208,
+      "failure_focus_bonus": 0.0,
+      "historical_reward": 0.0,
+      "novelty_bonus": 0.1,
+      "diversity_penalty": 0.0
+    },
+    {
+      "name": "GET /products - Boundary Test Large Page Size",
+      "test_type": "boundary_testing",
+      "endpoint": "GET /products",
+      "fingerprint": "GET|/products|boundary_testing|401|body=0|params=1",
+      "selection_reason": "uncertainty_coverage",
+      "score": 1.1755,
+      "expected_reward": 0.7545,
+      "uncertainty": 0.5743,
+      "exploration_bonus": 0.201,
+      "failure_focus_bonus": 0.0,
+      "historical_reward": 0.0,
+      "novelty_bonus": 0.1,
+      "diversity_penalty": 0.0
+    },
+    {
+      "name": "GET /products - Boundary Test Large Page Size_rl_missing_auth",
+      "test_type": "authentication",
+      "endpoint": "GET /products",
+      "fingerprint": "GET|/products|authentication|401|body=0|params=1|mut=missing_auth",
+      "selection_reason": "uncertainty_coverage",
+      "score": 1.6093,
+      "expected_reward": 0.7937,
+      "uncertainty": 0.5587,
+      "exploration_bonus": 0.1955,
+      "failure_focus_bonus": 0.4,
+      "historical_reward": 1.0999,
+      "novelty_bonus": 0.1,
+      "diversity_penalty": 0.0
+    },
+    {
+      "name": "test_get_products_rl_history_seed_authentication_401",
+      "test_type": "authentication",
+      "endpoint": "GET /products",
+      "fingerprint": "GET|/products|authentication|401|body=0|params=1|mut=history_seed",
+      "selection_reason": "uncertainty_coverage",
+      "score": 1.6093,
+      "expected_reward": 0.7937,
+      "uncertainty": 0.5587,
+      "exploration_bonus": 0.1955,
+      "failure_focus_bonus": 0.4,
+      "historical_reward": 1.0999,
+      "novelty_bonus": 0.1,
+      "diversity_penalty": 0.0
+    },
+    {
+      "name": "GET /products - Happy Path_rl_query_fuzz",
+      "test_type": "security",
+      "endpoint": "GET /products",
+      "fingerprint": "GET|/products|security|400|body=0|params=1|mut=query_fuzz",
+      "selection_reason": "uncertainty_coverage",
+      "score": 1.1842,
+      "expected_reward": 0.7384,
+      "uncertainty": 0.5423,
+      "exploration_bonus": 0.1898,
+      "failure_focus_bonus": 0.0,
+      "historical_reward": 0.0,
+      "novelty_bonus": 0.1,
+      "diversity_penalty": 0.0
+    }
+  ],
+  "mutation_policy": {
+    "enabled": true,
+    "base_candidate_count": 20,
+    "targeted_candidates": 20,
+    "mutated_candidates_added": 41,
+    "direct_mutation_candidates_added": 22,
+    "history_seed_candidates_added": 19,
+    "final_candidate_count": 61,
+    "priority_threshold": 0.08,
+    "max_new_candidates": 72,
+    "max_variants_per_target": 5,
+    "history_seed_priority_threshold": 0.12,
+    "operation_profiles_tracked": 7,
+    "mutation_strategy_breakdown": {
+      "missing_auth": 4,
+      "invalid_auth": 3,
+      "query_fuzz": 2,
+      "path_not_found": 1,
+      "learned_missing_required_field": 2,
+      "missing_required_field": 2,
+      "learned_numeric_underflow": 2,
+      "learned_required_null": 2,
+      "learned_string_length_underflow": 1,
+      "empty_body": 1,
+      "history_seed": 19
+    },
+    "top_targets": [
+      {
+        "name": "GET /products - Happy Path",
+        "fingerprint": "GET|/products|happy_path|200|body=0|params=0",
+        "priority": 1.194,
+        "attempts": 3,
+        "failure_rate": 1.0,
+        "avg_reward": -1.1001,
+        "uncertainty": 0.4472,
+        "rl_risk": 0.0,
+        "operation_failure_rate": 1.0,
+        "operation_attempts": 5,
+        "has_challenging_signal": true
+      },
+      {
+        "name": "GET /orders/{orderId} - Happy Path",
+        "fingerprint": "GET|/orders/{orderId}|happy_path|200|body=0|params=1",
+        "priority": 1.1878,
+        "attempts": 3,
+        "failure_rate": 1.0,
+        "avg_reward": -1.1003,
+        "uncertainty": 0.4384,
+        "rl_risk": 0.0,
+        "operation_failure_rate": 1.0,
+        "operation_attempts": 7,
+        "has_challenging_signal": true
+      },
+      {
+        "name": "POST /orders - Happy Path",
+        "fingerprint": "POST|/orders|happy_path|201|body=1|params=0",
+        "priority": 1.172,
+        "attempts": 3,
+        "failure_rate": 1.0,
+        "avg_reward": -1.1001,
+        "uncertainty": 0.4254,
+        "rl_risk": 0.0,
+        "operation_failure_rate": 1.0,
+        "operation_attempts": 10,
+        "has_challenging_signal": true
+      },
+      {
+        "name": "POST /products - Happy Path",
+        "fingerprint": "POST|/products|happy_path|201|body=1|params=0",
+        "priority": 1.172,
+        "attempts": 3,
+        "failure_rate": 1.0,
+        "avg_reward": -1.1001,
+        "uncertainty": 0.381,
+        "rl_risk": 0.0,
+        "operation_failure_rate": 1.0,
+        "operation_attempts": 15,
+        "has_challenging_signal": true
+      },
+      {
+        "name": "test_get_orders_orderId_integration_sequence_probe",
+        "fingerprint": "GET|/orders/{orderId}|integration|200|body=0|params=1",
+        "priority": 1.1677,
+        "attempts": 1,
+        "failure_rate": 1.0,
+        "avg_reward": -1.1,
+        "uncertainty": 0.4879,
+        "rl_risk": 0.0,
+        "operation_failure_rate": 1.0,
+        "operation_attempts": 7,
+        "has_challenging_signal": true
+      },
+      {
+        "name": "POST /products - Invalid Body Data",
+        "fingerprint": "POST|/products|input_validation|400|body=1|params=0",
+        "priority": 0.94,
+        "attempts": 4,
+        "failure_rate": 1.0,
+        "avg_reward": 1.0999,
+        "uncertainty": 0.334,
+        "rl_risk": 0.0,
+        "operation_failure_rate": 1.0,
+        "operation_attempts": 15,
+        "has_challenging_signal": true
+      },
+      {
+        "name": "GET /products - Missing Auth Token",
+        "fingerprint": "GET|/products|authentication|401|body=0|params=0",
+        "priority": 0.932,
+        "attempts": 1,
+        "failure_rate": 1.0,
+        "avg_reward": 1.1,
+        "uncertainty": 0.4329,
+        "rl_risk": 0.0,
+        "operation_failure_rate": 1.0,
+        "operation_attempts": 5,
+        "has_challenging_signal": true
+      },
+      {
+        "name": "test_get_orders_orderId_integration_order_unmet",
+        "fingerprint": "GET|/orders/{orderId}|integration|404|body=0|params=1",
+        "priority": 0.9257,
+        "attempts": 1,
+        "failure_rate": 1.0,
+        "avg_reward": 1.1,
+        "uncertainty": 0.4739,
+        "rl_risk": 0.0,
+        "operation_failure_rate": 1.0,
+        "operation_attempts": 7,
+        "has_challenging_signal": true
+      },
+      {
+        "name": "POST /products - Missing Auth Token",
+        "fingerprint": "POST|/products|authentication|401|body=1|params=0",
+        "priority": 0.91,
+        "attempts": 1,
+        "failure_rate": 1.0,
+        "avg_reward": 1.0999,
+        "uncertainty": 0.3738,
+        "rl_risk": 0.0,
+        "operation_failure_rate": 1.0,
+        "operation_attempts": 15,
+        "has_challenging_signal": true
+      },
+      {
+        "name": "GET /products - Performance Test",
+        "fingerprint": "GET|/products|performance|200|body=0|params=0",
+        "priority": 0.429,
+        "attempts": 0,
+        "failure_rate": 0.0,
+        "avg_reward": 0.0,
+        "uncertainty": 0.5944,
+        "rl_risk": 0.0,
+        "operation_failure_rate": 1.0,
+        "operation_attempts": 5,
+        "has_challenging_signal": true
+      },
+      {
+        "name": "GET /products - Boundary Test Large Page Size",
+        "fingerprint": "GET|/products|boundary_testing|401|body=0|params=1",
+        "priority": 0.4254,
+        "attempts": 0,
+        "failure_rate": 0.0,
+        "avg_reward": 0.0,
+        "uncertainty": 0.5743,
+        "rl_risk": 0.0,
+        "operation_failure_rate": 1.0,
+        "operation_attempts": 5,
+        "has_challenging_signal": true
+      },
+      {
+        "name": "POST /orders - Dependency Failure",
+        "fingerprint": "POST|/orders|error_handling|503|body=1|params=0",
+        "priority": 0.4099,
+        "attempts": 0,
+        "failure_rate": 0.0,
+        "avg_reward": 0.0,
+        "uncertainty": 0.6106,
+        "rl_risk": 0.0,
+        "operation_failure_rate": 1.0,
+        "operation_attempts": 10,
+        "has_challenging_signal": true
+      },
+      {
+        "name": "GET /orders/{orderId} - Security Test SQL Injection",
+        "fingerprint": "GET|/orders/{orderId}|security|400|body=0|params=1",
+        "priority": 0.407,
+        "attempts": 0,
+        "failure_rate": 0.0,
+        "avg_reward": 0.0,
+        "uncertainty": 0.5073,
+        "rl_risk": 0.0,
+        "operation_failure_rate": 1.0,
+        "operation_attempts": 7,
+        "has_challenging_signal": true
+      },
+      {
+        "name": "GET /orders/{orderId} - Malformed orderId",
+        "fingerprint": "GET|/orders/{orderId}|input_validation|400|body=0|params=1",
+        "priority": 0.4063,
+        "attempts": 0,
+        "failure_rate": 0.0,
+        "avg_reward": 0.0,
+        "uncertainty": 0.503,
+        "rl_risk": 0.0,
+        "operation_failure_rate": 1.0,
+        "operation_attempts": 7,
+        "has_challenging_signal": true
+      },
+      {
+        "name": "GET /orders/{orderId} - Empty orderId",
+        "fingerprint": "GET|/orders/{orderId}|input_validation|404|body=0|params=1",
+        "priority": 0.4063,
+        "attempts": 0,
+        "failure_rate": 0.0,
+        "avg_reward": 0.0,
+        "uncertainty": 0.503,
+        "rl_risk": 0.0,
+        "operation_failure_rate": 1.0,
+        "operation_attempts": 7,
+        "has_challenging_signal": true
+      }
+    ],
+    "history_seed_targets": [
+      {
+        "fingerprint": "GET|/orders/{orderId}|happy_path|200|body=0|params=1",
+        "priority": 0.9801,
+        "attempts": 3,
+        "failure_rate": 1.0,
+        "avg_reward": -1.1003
+      },
+      {
+        "fingerprint": "GET|/products|happy_path|200|body=0|params=0",
+        "priority": 0.98,
+        "attempts": 3,
+        "failure_rate": 1.0,
+        "avg_reward": -1.1001
+      },
+      {
+        "fingerprint": "POST|/orders|happy_path|201|body=1|params=0",
+        "priority": 0.98,
+        "attempts": 3,
+        "failure_rate": 1.0,
+        "avg_reward": -1.1001
+      },
+      {
+        "fingerprint": "POST|/products|happy_path|201|body=1|params=0",
+        "priority": 0.98,
+        "attempts": 3,
+        "failure_rate": 1.0,
+        "avg_reward": -1.1001
+      },
+      {
+        "fingerprint": "GET|/orders/{orderId}|integration|200|body=0|params=1",
+        "priority": 0.94,
+        "attempts": 1,
+        "failure_rate": 1.0,
+        "avg_reward": -1.1
+      },
+      {
+        "fingerprint": "POST|/orders|authentication|401|body=0|params=0",
+        "priority": 0.78,
+        "attempts": 4,
+        "failure_rate": 1.0,
+        "avg_reward": 1.1
+      },
+      {
+        "fingerprint": "POST|/products|input_validation|400|body=1|params=0",
+        "priority": 0.78,
+        "attempts": 4,
+        "failure_rate": 1.0,
+        "avg_reward": 1.0999
+      },
+      {
+        "fingerprint": "POST|/products|input_validation|400|body=0|params=0",
+        "priority": 0.76,
+        "attempts": 3,
+        "failure_rate": 1.0,
+        "avg_reward": 1.1
+      },
+      {
+        "fingerprint": "POST|/orders|boundary_testing|400|body=1|params=0",
+        "priority": 0.76,
+        "attempts": 3,
+        "failure_rate": 1.0,
+        "avg_reward": 1.1
+      },
+      {
+        "fingerprint": "GET|/orders/{orderId}|authentication|401|body=0|params=0",
+        "priority": 0.74,
+        "attempts": 2,
+        "failure_rate": 1.0,
+        "avg_reward": 1.1
+      },
+      {
+        "fingerprint": "POST|/products|boundary_testing|400|body=1|params=0",
+        "priority": 0.74,
+        "attempts": 2,
+        "failure_rate": 1.0,
+        "avg_reward": 1.0999
+      },
+      {
+        "fingerprint": "POST|/products|error_handling|400|body=1|params=0",
+        "priority": 0.74,
+        "attempts": 2,
+        "failure_rate": 1.0,
+        "avg_reward": 1.0999
+      },
+      {
+        "fingerprint": "GET|/products|authentication|401|body=0|params=0",
+        "priority": 0.72,
+        "attempts": 1,
+        "failure_rate": 1.0,
+        "avg_reward": 1.1
+      },
+      {
+        "fingerprint": "GET|/orders/{orderId}|integration|404|body=0|params=1",
+        "priority": 0.72,
+        "attempts": 1,
+        "failure_rate": 1.0,
+        "avg_reward": 1.1
+      },
+      {
+        "fingerprint": "GET|/products|authentication|401|body=0|params=1",
+        "priority": 0.72,
+        "attempts": 1,
+        "failure_rate": 1.0,
+        "avg_reward": 1.0999
+      }
+    ],
+    "applied_examples": [
+      {
+        "from": "GET /products - Happy Path",
+        "to": "GET /products - Happy Path_rl_missing_auth",
+        "fingerprint": "GET|/products|authentication|401|body=0|params=0|mut=missing_auth",
+        "priority": 1.194,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.4472,
+        "expected_status": 401,
+        "test_type": "authentication",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "missing_auth"
+      },
+      {
+        "from": "GET /products - Happy Path",
+        "to": "GET /products - Happy Path_rl_invalid_auth",
+        "fingerprint": "GET|/products|authentication|401|body=0|params=0|mut=invalid_auth",
+        "priority": 1.194,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.4472,
+        "expected_status": 401,
+        "test_type": "authentication",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "invalid_auth"
+      },
+      {
+        "from": "GET /products - Happy Path",
+        "to": "GET /products - Happy Path_rl_query_fuzz",
+        "fingerprint": "GET|/products|security|400|body=0|params=1|mut=query_fuzz",
+        "priority": 1.194,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.4472,
+        "expected_status": 400,
+        "test_type": "security",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "query_fuzz"
+      },
+      {
+        "from": "GET /orders/{orderId} - Happy Path",
+        "to": "GET /orders/{orderId} - Happy Path_rl_path_not_found",
+        "fingerprint": "GET|/orders/{orderId}|error_handling|404|body=0|params=1|mut=path_not_found",
+        "priority": 1.1878,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.4384,
+        "expected_status": 404,
+        "test_type": "error_handling",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "path_not_found"
+      },
+      {
+        "from": "GET /orders/{orderId} - Happy Path",
+        "to": "GET /orders/{orderId} - Happy Path_rl_missing_auth",
+        "fingerprint": "GET|/orders/{orderId}|authentication|401|body=0|params=1|mut=missing_auth",
+        "priority": 1.1878,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.4384,
+        "expected_status": 401,
+        "test_type": "authentication",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "missing_auth"
+      },
+      {
+        "from": "GET /orders/{orderId} - Happy Path",
+        "to": "GET /orders/{orderId} - Happy Path_rl_invalid_auth",
+        "fingerprint": "GET|/orders/{orderId}|authentication|401|body=0|params=1|mut=invalid_auth",
+        "priority": 1.1878,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.4384,
+        "expected_status": 401,
+        "test_type": "authentication",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "invalid_auth"
+      },
+      {
+        "from": "GET /orders/{orderId} - Happy Path",
+        "to": "GET /orders/{orderId} - Happy Path_rl_query_fuzz",
+        "fingerprint": "GET|/orders/{orderId}|security|400|body=0|params=1|mut=query_fuzz",
+        "priority": 1.1878,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.4384,
+        "expected_status": 400,
+        "test_type": "security",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "query_fuzz"
+      },
+      {
+        "from": "POST /orders - Happy Path",
+        "to": "POST /orders - Happy Path_rl_learned_missing_productid",
+        "fingerprint": "POST|/orders|input_validation|400|body=1|params=0|mut=learned_missing_required_field",
+        "priority": 1.172,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.4254,
+        "expected_status": 400,
+        "test_type": "input_validation",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "learned_missing_required_field"
+      },
+      {
+        "from": "POST /orders - Happy Path",
+        "to": "POST /orders - Happy Path_rl_missing_required_productid",
+        "fingerprint": "POST|/orders|error_handling|400|body=1|params=0|mut=missing_required_field",
+        "priority": 1.172,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.4254,
+        "expected_status": 400,
+        "test_type": "error_handling",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "missing_required_field"
+      },
+      {
+        "from": "POST /orders - Happy Path",
+        "to": "POST /orders - Happy Path_rl_learned_below_min_quantity",
+        "fingerprint": "POST|/orders|boundary_testing|400|body=1|params=0|mut=learned_numeric_underflow",
+        "priority": 1.172,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.4254,
+        "expected_status": 400,
+        "test_type": "boundary_testing",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "learned_numeric_underflow"
+      },
+      {
+        "from": "POST /orders - Happy Path",
+        "to": "POST /orders - Happy Path_rl_learned_null_quantity",
+        "fingerprint": "POST|/orders|input_validation|400|body=1|params=0|mut=learned_required_null",
+        "priority": 1.172,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.4254,
+        "expected_status": 400,
+        "test_type": "input_validation",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "learned_required_null"
+      },
+      {
+        "from": "POST /orders - Happy Path",
+        "to": "POST /orders - Happy Path_rl_missing_auth",
+        "fingerprint": "POST|/orders|authentication|401|body=1|params=0|mut=missing_auth",
+        "priority": 1.172,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.4254,
+        "expected_status": 401,
+        "test_type": "authentication",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "missing_auth"
+      },
+      {
+        "from": "POST /products - Happy Path",
+        "to": "POST /products - Happy Path_rl_learned_missing_name",
+        "fingerprint": "POST|/products|input_validation|400|body=1|params=0|mut=learned_missing_required_field",
+        "priority": 1.172,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.381,
+        "expected_status": 400,
+        "test_type": "input_validation",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "learned_missing_required_field"
+      },
+      {
+        "from": "POST /products - Happy Path",
+        "to": "POST /products - Happy Path_rl_missing_required_name",
+        "fingerprint": "POST|/products|error_handling|400|body=1|params=0|mut=missing_required_field",
+        "priority": 1.172,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.381,
+        "expected_status": 400,
+        "test_type": "error_handling",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "missing_required_field"
+      },
+      {
+        "from": "POST /products - Happy Path",
+        "to": "POST /products - Happy Path_rl_learned_below_min_price",
+        "fingerprint": "POST|/products|boundary_testing|400|body=1|params=0|mut=learned_numeric_underflow",
+        "priority": 1.172,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.381,
+        "expected_status": 400,
+        "test_type": "boundary_testing",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "learned_numeric_underflow"
+      },
+      {
+        "from": "POST /products - Happy Path",
+        "to": "POST /products - Happy Path_rl_learned_minlen_name",
+        "fingerprint": "POST|/products|boundary_testing|400|body=1|params=0|mut=learned_string_length_underflow",
+        "priority": 1.172,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.381,
+        "expected_status": 400,
+        "test_type": "boundary_testing",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "learned_string_length_underflow"
+      },
+      {
+        "from": "POST /products - Happy Path",
+        "to": "POST /products - Happy Path_rl_learned_null_price",
+        "fingerprint": "POST|/products|input_validation|400|body=1|params=0|mut=learned_required_null",
+        "priority": 1.172,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.381,
+        "expected_status": 400,
+        "test_type": "input_validation",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "learned_required_null"
+      },
+      {
+        "from": "POST /products - Missing Auth Token",
+        "to": "POST /products - Missing Auth Token_rl_invalid_auth",
+        "fingerprint": "POST|/products|authentication|401|body=1|params=0|mut=invalid_auth",
+        "priority": 0.91,
+        "rl_risk": 0.0,
+        "failure_rate": 1.0,
+        "uncertainty": 0.3738,
+        "expected_status": 401,
+        "test_type": "authentication",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 5,
+        "strategy": "invalid_auth"
+      },
+      {
+        "from": "GET /products - Boundary Test Large Page Size",
+        "to": "GET /products - Boundary Test Large Page Size_rl_missing_auth",
+        "fingerprint": "GET|/products|authentication|401|body=0|params=1|mut=missing_auth",
+        "priority": 0.4254,
+        "rl_risk": 0.0,
+        "failure_rate": 0.0,
+        "uncertainty": 0.5743,
+        "expected_status": 401,
+        "test_type": "authentication",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 4,
+        "strategy": "missing_auth"
+      },
+      {
+        "from": "POST /orders - Dependency Failure",
+        "to": "POST /orders - Dependency Failure_rl_empty_body",
+        "fingerprint": "POST|/orders|input_validation|400|body=0|params=0|mut=empty_body",
+        "priority": 0.4099,
+        "rl_risk": 0.0,
+        "failure_rate": 0.0,
+        "uncertainty": 0.6106,
+        "expected_status": 400,
+        "test_type": "input_validation",
+        "operation_failure_rate": 1.0,
+        "mutation_budget": 4,
+        "strategy": "empty_body"
+      }
+    ]
+  },
+  "mutation_decision_trace": [
+    {
+      "from": "GET /products - Happy Path",
+      "to": "GET /products - Happy Path_rl_missing_auth",
+      "fingerprint": "GET|/products|authentication|401|body=0|params=0|mut=missing_auth",
+      "priority": 1.194,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.4472,
+      "expected_status": 401,
+      "test_type": "authentication",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "missing_auth"
+    },
+    {
+      "from": "GET /products - Happy Path",
+      "to": "GET /products - Happy Path_rl_invalid_auth",
+      "fingerprint": "GET|/products|authentication|401|body=0|params=0|mut=invalid_auth",
+      "priority": 1.194,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.4472,
+      "expected_status": 401,
+      "test_type": "authentication",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "invalid_auth"
+    },
+    {
+      "from": "GET /products - Happy Path",
+      "to": "GET /products - Happy Path_rl_query_fuzz",
+      "fingerprint": "GET|/products|security|400|body=0|params=1|mut=query_fuzz",
+      "priority": 1.194,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.4472,
+      "expected_status": 400,
+      "test_type": "security",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "query_fuzz"
+    },
+    {
+      "from": "GET /orders/{orderId} - Happy Path",
+      "to": "GET /orders/{orderId} - Happy Path_rl_path_not_found",
+      "fingerprint": "GET|/orders/{orderId}|error_handling|404|body=0|params=1|mut=path_not_found",
+      "priority": 1.1878,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.4384,
+      "expected_status": 404,
+      "test_type": "error_handling",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "path_not_found"
+    },
+    {
+      "from": "GET /orders/{orderId} - Happy Path",
+      "to": "GET /orders/{orderId} - Happy Path_rl_missing_auth",
+      "fingerprint": "GET|/orders/{orderId}|authentication|401|body=0|params=1|mut=missing_auth",
+      "priority": 1.1878,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.4384,
+      "expected_status": 401,
+      "test_type": "authentication",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "missing_auth"
+    },
+    {
+      "from": "GET /orders/{orderId} - Happy Path",
+      "to": "GET /orders/{orderId} - Happy Path_rl_invalid_auth",
+      "fingerprint": "GET|/orders/{orderId}|authentication|401|body=0|params=1|mut=invalid_auth",
+      "priority": 1.1878,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.4384,
+      "expected_status": 401,
+      "test_type": "authentication",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "invalid_auth"
+    },
+    {
+      "from": "GET /orders/{orderId} - Happy Path",
+      "to": "GET /orders/{orderId} - Happy Path_rl_query_fuzz",
+      "fingerprint": "GET|/orders/{orderId}|security|400|body=0|params=1|mut=query_fuzz",
+      "priority": 1.1878,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.4384,
+      "expected_status": 400,
+      "test_type": "security",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "query_fuzz"
+    },
+    {
+      "from": "POST /orders - Happy Path",
+      "to": "POST /orders - Happy Path_rl_learned_missing_productid",
+      "fingerprint": "POST|/orders|input_validation|400|body=1|params=0|mut=learned_missing_required_field",
+      "priority": 1.172,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.4254,
+      "expected_status": 400,
+      "test_type": "input_validation",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "learned_missing_required_field"
+    },
+    {
+      "from": "POST /orders - Happy Path",
+      "to": "POST /orders - Happy Path_rl_missing_required_productid",
+      "fingerprint": "POST|/orders|error_handling|400|body=1|params=0|mut=missing_required_field",
+      "priority": 1.172,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.4254,
+      "expected_status": 400,
+      "test_type": "error_handling",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "missing_required_field"
+    },
+    {
+      "from": "POST /orders - Happy Path",
+      "to": "POST /orders - Happy Path_rl_learned_below_min_quantity",
+      "fingerprint": "POST|/orders|boundary_testing|400|body=1|params=0|mut=learned_numeric_underflow",
+      "priority": 1.172,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.4254,
+      "expected_status": 400,
+      "test_type": "boundary_testing",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "learned_numeric_underflow"
+    },
+    {
+      "from": "POST /orders - Happy Path",
+      "to": "POST /orders - Happy Path_rl_learned_null_quantity",
+      "fingerprint": "POST|/orders|input_validation|400|body=1|params=0|mut=learned_required_null",
+      "priority": 1.172,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.4254,
+      "expected_status": 400,
+      "test_type": "input_validation",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "learned_required_null"
+    },
+    {
+      "from": "POST /orders - Happy Path",
+      "to": "POST /orders - Happy Path_rl_missing_auth",
+      "fingerprint": "POST|/orders|authentication|401|body=1|params=0|mut=missing_auth",
+      "priority": 1.172,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.4254,
+      "expected_status": 401,
+      "test_type": "authentication",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "missing_auth"
+    },
+    {
+      "from": "POST /products - Happy Path",
+      "to": "POST /products - Happy Path_rl_learned_missing_name",
+      "fingerprint": "POST|/products|input_validation|400|body=1|params=0|mut=learned_missing_required_field",
+      "priority": 1.172,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.381,
+      "expected_status": 400,
+      "test_type": "input_validation",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "learned_missing_required_field"
+    },
+    {
+      "from": "POST /products - Happy Path",
+      "to": "POST /products - Happy Path_rl_missing_required_name",
+      "fingerprint": "POST|/products|error_handling|400|body=1|params=0|mut=missing_required_field",
+      "priority": 1.172,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.381,
+      "expected_status": 400,
+      "test_type": "error_handling",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "missing_required_field"
+    },
+    {
+      "from": "POST /products - Happy Path",
+      "to": "POST /products - Happy Path_rl_learned_below_min_price",
+      "fingerprint": "POST|/products|boundary_testing|400|body=1|params=0|mut=learned_numeric_underflow",
+      "priority": 1.172,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.381,
+      "expected_status": 400,
+      "test_type": "boundary_testing",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "learned_numeric_underflow"
+    },
+    {
+      "from": "POST /products - Happy Path",
+      "to": "POST /products - Happy Path_rl_learned_minlen_name",
+      "fingerprint": "POST|/products|boundary_testing|400|body=1|params=0|mut=learned_string_length_underflow",
+      "priority": 1.172,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.381,
+      "expected_status": 400,
+      "test_type": "boundary_testing",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "learned_string_length_underflow"
+    },
+    {
+      "from": "POST /products - Happy Path",
+      "to": "POST /products - Happy Path_rl_learned_null_price",
+      "fingerprint": "POST|/products|input_validation|400|body=1|params=0|mut=learned_required_null",
+      "priority": 1.172,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.381,
+      "expected_status": 400,
+      "test_type": "input_validation",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "learned_required_null"
+    },
+    {
+      "from": "POST /products - Missing Auth Token",
+      "to": "POST /products - Missing Auth Token_rl_invalid_auth",
+      "fingerprint": "POST|/products|authentication|401|body=1|params=0|mut=invalid_auth",
+      "priority": 0.91,
+      "rl_risk": 0.0,
+      "failure_rate": 1.0,
+      "uncertainty": 0.3738,
+      "expected_status": 401,
+      "test_type": "authentication",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 5,
+      "strategy": "invalid_auth"
+    },
+    {
+      "from": "GET /products - Boundary Test Large Page Size",
+      "to": "GET /products - Boundary Test Large Page Size_rl_missing_auth",
+      "fingerprint": "GET|/products|authentication|401|body=0|params=1|mut=missing_auth",
+      "priority": 0.4254,
+      "rl_risk": 0.0,
+      "failure_rate": 0.0,
+      "uncertainty": 0.5743,
+      "expected_status": 401,
+      "test_type": "authentication",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 4,
+      "strategy": "missing_auth"
+    },
+    {
+      "from": "POST /orders - Dependency Failure",
+      "to": "POST /orders - Dependency Failure_rl_empty_body",
+      "fingerprint": "POST|/orders|input_validation|400|body=0|params=0|mut=empty_body",
+      "priority": 0.4099,
+      "rl_risk": 0.0,
+      "failure_rate": 0.0,
+      "uncertainty": 0.6106,
+      "expected_status": 400,
+      "test_type": "input_validation",
+      "operation_failure_rate": 1.0,
+      "mutation_budget": 4,
+      "strategy": "empty_body"
+    }
+  ],
+  "repair_policy": {
+    "active_rules": 0,
+    "applied_repairs": 0,
+    "status_overrides": 0,
+    "request_body_repairs": 0,
+    "applied_examples": []
+  },
+  "scenario_source_breakdown": {
+    "base_generated": {
+      "llm_base": 20,
+      "heuristic_base": 0,
+      "rl_mutation": 0,
+      "rl_history_seed": 0
+    },
+    "candidate_pool": {
+      "llm_base": 20,
+      "heuristic_base": 0,
+      "rl_mutation": 22,
+      "rl_history_seed": 19
+    },
+    "selected": {
+      "llm_base": 5,
+      "heuristic_base": 0,
+      "rl_mutation": 5,
+      "rl_history_seed": 6
+    }
+  },
+  "weak_pattern_deltas": {
+    "total_changed_patterns": 14,
+    "improved_count": 0,
+    "regressed_count": 14,
+    "unchanged_count": 0,
+    "items": [
+      {
+        "fingerprint": "POST|/orders|error_handling|503|body=1|params=0",
+        "from_failure_rate": 0.0,
+        "to_failure_rate": 1.0,
+        "delta_failure_rate": 1.0,
+        "from_attempts": 0,
+        "to_attempts": 1,
+        "status": "regressed"
+      },
+      {
+        "fingerprint": "GET|/products|authentication|401|body=0|params=0|mut=missing_auth",
+        "from_failure_rate": 0.0,
+        "to_failure_rate": 1.0,
+        "delta_failure_rate": 1.0,
+        "from_attempts": 0,
+        "to_attempts": 1,
+        "status": "regressed"
+      },
+      {
+        "fingerprint": "POST|/orders|boundary_testing|400|body=1|params=0|mut=learned_numeric_underflow",
+        "from_failure_rate": 0.0,
+        "to_failure_rate": 1.0,
+        "delta_failure_rate": 1.0,
+        "from_attempts": 0,
+        "to_attempts": 1,
+        "status": "regressed"
+      },
+      {
+        "fingerprint": "GET|/products|performance|200|body=0|params=0",
+        "from_failure_rate": 0.0,
+        "to_failure_rate": 1.0,
+        "delta_failure_rate": 1.0,
+        "from_attempts": 0,
+        "to_attempts": 1,
+        "status": "regressed"
+      },
+      {
+        "fingerprint": "POST|/products|input_validation|400|body=0|params=0|mut=history_seed",
+        "from_failure_rate": 0.0,
+        "to_failure_rate": 1.0,
+        "delta_failure_rate": 1.0,
+        "from_attempts": 0,
+        "to_attempts": 1,
+        "status": "regressed"
+      },
+      {
+        "fingerprint": "POST|/products|happy_path|201|body=1|params=0|mut=history_seed",
+        "from_failure_rate": 0.0,
+        "to_failure_rate": 1.0,
+        "delta_failure_rate": 1.0,
+        "from_attempts": 0,
+        "to_attempts": 1,
+        "status": "regressed"
+      },
+      {
+        "fingerprint": "GET|/products|security|400|body=0|params=1|mut=query_fuzz",
+        "from_failure_rate": 0.0,
+        "to_failure_rate": 1.0,
+        "delta_failure_rate": 1.0,
+        "from_attempts": 0,
+        "to_attempts": 1,
+        "status": "regressed"
+      },
+      {
+        "fingerprint": "GET|/products|boundary_testing|401|body=0|params=1",
+        "from_failure_rate": 0.0,
+        "to_failure_rate": 1.0,
+        "delta_failure_rate": 1.0,
+        "from_attempts": 0,
+        "to_attempts": 1,
+        "status": "regressed"
+      },
+      {
+        "fingerprint": "GET|/products|authentication|401|body=0|params=1|mut=missing_auth",
+        "from_failure_rate": 0.0,
+        "to_failure_rate": 1.0,
+        "delta_failure_rate": 1.0,
+        "from_attempts": 0,
+        "to_attempts": 1,
+        "status": "regressed"
+      },
+      {
+        "fingerprint": "POST|/products|error_handling|400|body=1|params=0|mut=missing_required_field",
+        "from_failure_rate": 0.0,
+        "to_failure_rate": 1.0,
+        "delta_failure_rate": 1.0,
+        "from_attempts": 0,
+        "to_attempts": 1,
+        "status": "regressed"
+      },
+      {
+        "fingerprint": "POST|/orders|happy_path|201|body=1|params=0|mut=history_seed",
+        "from_failure_rate": 0.0,
+        "to_failure_rate": 1.0,
+        "delta_failure_rate": 1.0,
+        "from_attempts": 0,
+        "to_attempts": 1,
+        "status": "regressed"
+      },
+      {
+        "fingerprint": "GET|/products|authentication|401|body=0|params=1|mut=history_seed",
+        "from_failure_rate": 0.0,
+        "to_failure_rate": 1.0,
+        "delta_failure_rate": 1.0,
+        "from_attempts": 0,
+        "to_attempts": 1,
+        "status": "regressed"
+      },
+      {
+        "fingerprint": "GET|/products|happy_path|200|body=0|params=0|mut=history_seed",
+        "from_failure_rate": 0.0,
+        "to_failure_rate": 1.0,
+        "delta_failure_rate": 1.0,
+        "from_attempts": 0,
+        "to_attempts": 1,
+        "status": "regressed"
+      },
+      {
+        "fingerprint": "GET|/orders/{orderId}|happy_path|200|body=0|params=1|mut=history_seed",
+        "from_failure_rate": 0.0,
+        "to_failure_rate": 1.0,
+        "delta_failure_rate": 1.0,
+        "from_attempts": 0,
+        "to_attempts": 1,
+        "status": "regressed"
+      }
+    ]
+  },
+  "repro_artifacts": [
+    {
+      "fingerprint": "GET|/orders/{orderId}|happy_path|200|body=0|params=1|mut=history_seed",
+      "name": "test_get_orders_orderId_rl_history_seed_happy_path_200",
+      "method": "GET",
+      "endpoint": "/orders/123",
+      "expected_status": 200,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {
+          "Authorization": "Bearer valid_token_123"
+        },
+        "query": {},
+        "body": null
+      },
+      "minimized_request": {
+        "query": {},
+        "body": null,
+        "status": 404
+      },
+      "curl_repro": "curl -X GET http://127.0.0.1:8787/orders/123 -H 'Authorization: Bearer ***'"
+    },
+    {
+      "fingerprint": "GET|/products|happy_path|200|body=0|params=0|mut=history_seed",
+      "name": "test_get_products_rl_history_seed_happy_path_200",
+      "method": "GET",
+      "endpoint": "/products",
+      "expected_status": 200,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {
+          "Authorization": "Bearer valid_token_123"
+        },
+        "query": {},
+        "body": null
+      },
+      "minimized_request": {
+        "query": {},
+        "body": null,
+        "status": 404
+      },
+      "curl_repro": "curl -X GET http://127.0.0.1:8787/products -H 'Authorization: Bearer ***'"
+    },
+    {
+      "fingerprint": "POST|/orders|happy_path|201|body=1|params=0|mut=history_seed",
+      "name": "test_post_orders_rl_history_seed_happy_path_201",
+      "method": "POST",
+      "endpoint": "/orders",
+      "expected_status": 201,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {
+          "Authorization": "Bearer valid_token_123"
+        },
+        "query": {},
+        "body": {
+          "productId": "123",
+          "quantity": 1
+        }
+      },
+      "minimized_request": {
+        "query": {},
+        "body": {},
+        "status": 404
+      },
+      "curl_repro": "curl -X POST http://127.0.0.1:8787/orders -H 'Authorization: Bearer ***' -H 'Content-Type: application/json' -d '{}'"
+    },
+    {
+      "fingerprint": "POST|/products|happy_path|201|body=1|params=0|mut=history_seed",
+      "name": "test_post_products_rl_history_seed_happy_path_201",
+      "method": "POST",
+      "endpoint": "/products",
+      "expected_status": 201,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {
+          "Authorization": "Bearer valid_token_123"
+        },
+        "query": {},
+        "body": {
+          "name": "sample_name",
+          "price": 1.0
+        }
+      },
+      "minimized_request": {
+        "query": {},
+        "body": {},
+        "status": 404
+      },
+      "curl_repro": "curl -X POST http://127.0.0.1:8787/products -H 'Authorization: Bearer ***' -H 'Content-Type: application/json' -d '{}'"
+    },
+    {
+      "fingerprint": "GET|/products|authentication|401|body=0|params=0|mut=missing_auth",
+      "name": "GET /products - Happy Path_rl_missing_auth",
+      "method": "GET",
+      "endpoint": "/products",
+      "expected_status": 401,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {},
+        "query": {},
+        "body": null
+      },
+      "minimized_request": {
+        "query": {},
+        "body": null,
+        "status": 404
+      },
+      "curl_repro": "curl -X GET http://127.0.0.1:8787/products"
+    },
+    {
+      "fingerprint": "POST|/products|input_validation|400|body=0|params=0|mut=history_seed",
+      "name": "test_post_products_rl_history_seed_input_validation_400",
+      "method": "POST",
+      "endpoint": "/products",
+      "expected_status": 400,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {
+          "Authorization": "Bearer valid_token_123"
+        },
+        "query": {},
+        "body": {}
+      },
+      "minimized_request": {
+        "query": {},
+        "body": {},
+        "status": 404
+      },
+      "curl_repro": "curl -X POST http://127.0.0.1:8787/products -H 'Authorization: Bearer ***' -H 'Content-Type: application/json' -d '{}'"
+    },
+    {
+      "fingerprint": "POST|/products|error_handling|400|body=1|params=0|mut=missing_required_field",
+      "name": "POST /products - Happy Path_rl_missing_required_name",
+      "method": "POST",
+      "endpoint": "/products",
+      "expected_status": 400,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {
+          "Authorization": "Bearer valid_token",
+          "Content-Type": "application/json"
+        },
+        "query": {},
+        "body": {
+          "price": 19.99,
+          "stock": 100
+        }
+      },
+      "minimized_request": {
+        "query": {},
+        "body": {},
+        "status": 404
+      },
+      "curl_repro": "curl -X POST http://127.0.0.1:8787/products -H 'Authorization: Bearer ***' -H 'Content-Type: application/json' -d '{}'"
+    },
+    {
+      "fingerprint": "POST|/orders|boundary_testing|400|body=1|params=0|mut=learned_numeric_underflow",
+      "name": "POST /orders - Happy Path_rl_learned_below_min_quantity",
+      "method": "POST",
+      "endpoint": "/orders",
+      "expected_status": 400,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {
+          "Authorization": "Bearer valid_token",
+          "Content-Type": "application/json"
+        },
+        "query": {},
+        "body": {
+          "productId": "12345",
+          "quantity": 0.0
+        }
+      },
+      "minimized_request": {
+        "query": {},
+        "body": {},
+        "status": 404
+      },
+      "curl_repro": "curl -X POST http://127.0.0.1:8787/orders -H 'Authorization: Bearer ***' -H 'Content-Type: application/json' -d '{}'"
+    },
+    {
+      "fingerprint": "GET|/orders/{orderId}|happy_path|200|body=0|params=1",
+      "name": "GET /orders/{orderId} - Happy Path",
+      "method": "GET",
+      "endpoint": "/orders/abc123",
+      "expected_status": 200,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {
+          "Authorization": "Bearer valid_token"
+        },
+        "query": {},
+        "body": null
+      },
+      "minimized_request": {
+        "query": {},
+        "body": null,
+        "status": 404
+      },
+      "curl_repro": "curl -X GET http://127.0.0.1:8787/orders/abc123 -H 'Authorization: Bearer ***'"
+    },
+    {
+      "fingerprint": "GET|/products|happy_path|200|body=0|params=0",
+      "name": "GET /products - Happy Path",
+      "method": "GET",
+      "endpoint": "/products",
+      "expected_status": 200,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {
+          "Authorization": "Bearer valid_token"
+        },
+        "query": {},
+        "body": null
+      },
+      "minimized_request": {
+        "query": {},
+        "body": null,
+        "status": 404
+      },
+      "curl_repro": "curl -X GET http://127.0.0.1:8787/products -H 'Authorization: Bearer ***'"
+    },
+    {
+      "fingerprint": "POST|/orders|error_handling|503|body=1|params=0",
+      "name": "POST /orders - Dependency Failure",
+      "method": "POST",
+      "endpoint": "/orders",
+      "expected_status": 503,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {
+          "Authorization": "Bearer valid_token",
+          "Content-Type": "application/json"
+        },
+        "query": {},
+        "body": {
+          "productId": "12345",
+          "quantity": 2
+        }
+      },
+      "minimized_request": {
+        "query": {},
+        "body": {},
+        "status": 404
+      },
+      "curl_repro": "curl -X POST http://127.0.0.1:8787/orders -H 'Authorization: Bearer ***' -H 'Content-Type: application/json' -d '{}'"
+    },
+    {
+      "fingerprint": "GET|/products|performance|200|body=0|params=0",
+      "name": "GET /products - Performance Test",
+      "method": "GET",
+      "endpoint": "/products",
+      "expected_status": 200,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {
+          "Authorization": "Bearer valid_token"
+        },
+        "query": {},
+        "body": null
+      },
+      "minimized_request": {
+        "query": {},
+        "body": null,
+        "status": 404
+      },
+      "curl_repro": "curl -X GET http://127.0.0.1:8787/products -H 'Authorization: Bearer ***'"
+    },
+    {
+      "fingerprint": "GET|/products|boundary_testing|401|body=0|params=1",
+      "name": "GET /products - Boundary Test Large Page Size",
+      "method": "GET",
+      "endpoint": "/products",
+      "expected_status": 401,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {
+          "Authorization": "Bearer invalid"
+        },
+        "query": {
+          "pageSize": 1000
+        },
+        "body": null
+      },
+      "minimized_request": {
+        "query": {},
+        "body": null,
+        "status": 404
+      },
+      "curl_repro": "curl -X GET http://127.0.0.1:8787/products -H 'Authorization: Bearer ***'"
+    },
+    {
+      "fingerprint": "GET|/products|authentication|401|body=0|params=1|mut=missing_auth",
+      "name": "GET /products - Boundary Test Large Page Size_rl_missing_auth",
+      "method": "GET",
+      "endpoint": "/products",
+      "expected_status": 401,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {},
+        "query": {
+          "pageSize": 1000
+        },
+        "body": null
+      },
+      "minimized_request": {
+        "query": {},
+        "body": null,
+        "status": 404
+      },
+      "curl_repro": "curl -X GET http://127.0.0.1:8787/products"
+    },
+    {
+      "fingerprint": "GET|/products|authentication|401|body=0|params=1|mut=history_seed",
+      "name": "test_get_products_rl_history_seed_authentication_401",
+      "method": "GET",
+      "endpoint": "/products",
+      "expected_status": 401,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {},
+        "query": {
+          "q": "'; DROP TABLE users; --"
+        },
+        "body": null
+      },
+      "minimized_request": {
+        "query": {},
+        "body": null,
+        "status": 404
+      },
+      "curl_repro": "curl -X GET http://127.0.0.1:8787/products"
+    },
+    {
+      "fingerprint": "GET|/products|security|400|body=0|params=1|mut=query_fuzz",
+      "name": "GET /products - Happy Path_rl_query_fuzz",
+      "method": "GET",
+      "endpoint": "/products",
+      "expected_status": 400,
+      "actual_status": 404,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "request": {
+        "headers": {
+          "Authorization": "Bearer valid_token"
+        },
+        "query": {
+          "q": "'; DROP TABLE users; --"
+        },
+        "body": null
+      },
+      "minimized_request": {
+        "query": {},
+        "body": null,
+        "status": 404
+      },
+      "curl_repro": "curl -X GET http://127.0.0.1:8787/products -H 'Authorization: Bearer ***'"
+    }
+  ],
+  "environment_tier_signal": {
+    "profile": "staging",
+    "reward_weight": 1.0,
+    "isolation_mode": "live_http_base_url"
+  },
+  "gam_context_pack": {
+    "status": "needs_retry",
+    "quality_score": 1.0,
+    "selected_pages": [
+      {
+        "page_id": "",
+        "title": "RL Trend Signals: E-commerce API",
+        "source": "memo",
+        "tags": [
+          "memo",
+          "learning",
+          "trend",
+          "run_aware",
+          "e_commerce_api",
+          "spec_c3ebc1397f69182e"
+        ],
+        "similarity": 2.09,
+        "excerpt": "- GET /orders/{orderId} | happy_path | expected=200 | attempts=3 | failure_rate=1.0 | avg_reward=-1.1003 | - last_run_reward=0.6532 | Historical run_count: 2 | Spec: E-commerce API"
+      },
+      {
+        "page_id": "",
+        "title": "RL Learning Signals: E-commerce API",
+        "source": "memo",
+        "tags": [
+          "memo",
+          "learning",
+          "rl_signal",
+          "weakness",
+          "e_commerce_api",
+          "spec_c3ebc1397f69182e"
+        ],
+        "similarity": 1.74,
+        "excerpt": "- GET /orders/{orderId} | happy path | expect 200 | failure_rate=1.0 | avg_reward=-1.1003 | attempts=3 | Historical run_count: 2 | Spec: E-commerce API"
+      },
+      {
+        "page_id": "",
+        "title": "Spec Context Signals: E-commerce API",
+        "source": "memo",
+        "tags": [
+          "memo",
+          "spec_context",
+          "dynamic",
+          "run_aware",
+          "e_commerce_api",
+          "spec_c3ebc1397f69182e"
+        ],
+        "similarity": 1.42,
+        "excerpt": "- GET /orders/{orderId} | happy path | expected=200 | failure_rate=1.0 | Historical run_count: 2 | Spec: E-commerce API"
+      },
+      {
+        "page_id": "",
+        "title": "RL Trend Signals: E-commerce API",
+        "source": "memo",
+        "tags": [
+          "memo",
+          "learning",
+          "trend",
+          "run_aware",
+          "e_commerce_api",
+          "spec_c3ebc1397f69182e"
+        ],
+        "similarity": 1.1833,
+        "excerpt": "- GET /orders/{orderId} | happy_path | expected=200 | attempts=1 | failure_rate=1.0 | avg_reward=-1.1004 | - last_run_reward=0.5957 | Historical run_count: 1 | Spec: E-commerce API"
+      },
+      {
+        "page_id": "",
+        "title": "Spec Context Signals: E-commerce API",
+        "source": "memo",
+        "tags": [
+          "memo",
+          "spec_context",
+          "dynamic",
+          "run_aware",
+          "e_commerce_api",
+          "spec_c3ebc1397f69182e"
+        ],
+        "similarity": 0.6373,
+        "excerpt": "Historical run_count: 1 | Spec: E-commerce API"
+      },
+      {
+        "page_id": "",
+        "title": "Schemathesis Stateful Testing",
+        "source": "trusted_docs_fallback",
+        "tags": [
+          "trusted_docs",
+          "schemathesis",
+          "stateful"
+        ],
+        "similarity": null,
+        "excerpt": "Spec risk action (E-commerce API): prioritize stateful sequences for producer->consumer operations and verify dependent IDs."
+      },
+      {
+        "page_id": "",
+        "title": "Agent Lightning RL Focus",
+        "source": "trusted_docs_fallback",
+        "tags": [
+          "trusted_docs",
+          "agent_lightning",
+          "rl"
+        ],
+        "similarity": null,
+        "excerpt": "Weak RL pattern: GET /orders/{orderId} (happy_path) expected 200, failure_rate=1.0. Trend delta action: track run-over-run failure-rate deltas with checkpointed policy updates."
+      },
+      {
+        "page_id": "",
+        "title": "GAM Context Quality Contract",
+        "source": "trusted_docs_fallback",
+        "tags": [
+          "trusted_docs",
+          "gam",
+          "context_pack"
+        ],
+        "similarity": null,
+        "excerpt": "Next action: enrich memory with non-generic signals for auth=bearer including one trend delta, one spec risk, and one concrete mutation action."
+      }
+    ],
+    "selected_count": 8,
+    "rejected_pages": [],
+    "rejected_count": 0,
+    "rejection_reasons": [
+      {
+        "reason": "missing_contract_items:has_diverse_endpoint_signal,has_diverse_test_type_signal",
+        "severity": "warning"
+      }
+    ],
+    "reflection": "Completed 2 research iterations. Found 6 relevant excerpts.",
+    "contract_checks": {
+      "has_weak_pattern": true,
+      "has_trend_delta": true,
+      "has_spec_risk": true,
+      "has_next_action": true,
+      "weak_pattern_mode": "direct",
+      "has_exploration_proxy": false,
+      "has_diverse_endpoint_signal": false,
+      "has_diverse_test_type_signal": false
+    }
+  },
+  "prompt_trace": {
+    "base_prompt": "Run regression QA with both positive and negative paths. Keep minimum happy-path coverage for all operations, but prioritize negative tests: authentication, authorization, input validation, boundary, error handling, security, and edge cases. Include regressions for empty/missing path params, malformed IDs, invalid auth tokens, and dependency-order failures.",
+    "effective_prompt": "Run regression QA with both positive and negative paths. Keep minimum happy-path coverage for all operations, but prioritize negative tests: authentication, authorization, input validation, boundary, error handling, security, and edge cases. Include regressions for empty/missing path params, malformed IDs, invalid auth tokens, and dependency-order failures.\n\nFocus additionally on (GAM):\n- Trend delta: run_reward improved by +0.0575 (avg_decision_delta +0.1903); next action: preserve one successful mutation and add one novel auth/boundary variant to validate stability.\n- Spec signature: ops=4, auth_required=4, write_ops=2, path_param_ops=1. Prioritize scenarios reflecting this shape.\n\nPrioritize historically weak patterns (RL):\n- GET /orders/{orderId}: reinforce happy_path checks targeting status 200 (historical failure rate 1.00 over 3 attempts).\n- GET /products: reinforce happy_path checks targeting status 200 (historical failure rate 1.00 over 3 attempts).\n- POST /orders: reinforce happy_path checks targeting status 201 (historical failure rate 1.00 over 3 attempts).",
+    "base_prompt_supplied_by_user": true,
+    "prompt_seeded_from_default": false,
+    "focus_points_used": [
+      "Trend delta: run_reward improved by +0.0575 (avg_decision_delta +0.1903); next action: preserve one successful mutation and add one novel auth/boundary variant to validate stability.",
+      "Spec signature: ops=4, auth_required=4, write_ops=2, path_param_ops=1. Prioritize scenarios reflecting this shape.",
+      "GET /orders/{orderId}: reinforce happy_path checks targeting status 200 (historical failure rate 1.00 over 3 attempts).",
+      "GET /products: reinforce happy_path checks targeting status 200 (historical failure rate 1.00 over 3 attempts).",
+      "POST /orders: reinforce happy_path checks targeting status 201 (historical failure rate 1.00 over 3 attempts)."
+    ],
+    "focus_points_used_count": 5,
+    "gam_focus_points_used": [
+      "Trend delta: run_reward improved by +0.0575 (avg_decision_delta +0.1903); next action: preserve one successful mutation and add one novel auth/boundary variant to validate stability.",
+      "Spec signature: ops=4, auth_required=4, write_ops=2, path_param_ops=1. Prioritize scenarios reflecting this shape."
+    ],
+    "gam_focus_points_used_count": 2,
+    "rl_focus_points_used": [
+      "GET /orders/{orderId}: reinforce happy_path checks targeting status 200 (historical failure rate 1.00 over 3 attempts).",
+      "GET /products: reinforce happy_path checks targeting status 200 (historical failure rate 1.00 over 3 attempts).",
+      "POST /orders: reinforce happy_path checks targeting status 201 (historical failure rate 1.00 over 3 attempts)."
+    ],
+    "rl_focus_points_used_count": 3,
+    "memory_excerpts_available_count": 8,
+    "memory_excerpt_preview": [
+      {
+        "source": "memo",
+        "similarity": 2.09,
+        "excerpt": "- GET /orders/{orderId} | happy_path | expected=200 | attempts=3 | failure_rate=1.0 | avg_reward=-1.1003 | - last_run_reward=0.6532 | Historical run_count: 2 | Spec: E-commerce API"
+      },
+      {
+        "source": "memo",
+        "similarity": 1.74,
+        "excerpt": "- GET /orders/{orderId} | happy path | expect 200 | failure_rate=1.0 | avg_reward=-1.1003 | attempts=3 | Historical run_count: 2 | Spec: E-commerce API"
+      },
+      {
+        "source": "memo",
+        "similarity": 1.42,
+        "excerpt": "- GET /orders/{orderId} | happy path | expected=200 | failure_rate=1.0 | Historical run_count: 2 | Spec: E-commerce API"
+      },
+      {
+        "source": "memo",
+        "similarity": 1.1833,
+        "excerpt": "- GET /orders/{orderId} | happy_path | expected=200 | attempts=1 | failure_rate=1.0 | avg_reward=-1.1004 | - last_run_reward=0.5957 | Historical run_count: 1 | Spec: E-commerce API"
+      },
+      {
+        "source": "memo",
+        "similarity": 0.6373,
+        "excerpt": "Historical run_count: 1 | Spec: E-commerce API"
+      },
+      {
+        "source": "trusted_docs_fallback",
+        "similarity": null,
+        "excerpt": "Spec risk action (E-commerce API): prioritize stateful sequences for producer->consumer operations and verify dependent IDs."
+      },
+      {
+        "source": "trusted_docs_fallback",
+        "similarity": null,
+        "excerpt": "Weak RL pattern: GET /orders/{orderId} (happy_path) expected 200, failure_rate=1.0. Trend delta action: track run-over-run failure-rate deltas with checkpointed policy updates."
+      },
+      {
+        "source": "trusted_docs_fallback",
+        "similarity": null,
+        "excerpt": "Next action: enrich memory with non-generic signals for auth=bearer including one trend delta, one spec risk, and one concrete mutation action."
+      }
+    ],
+    "prompt_was_enriched_by_gam": true,
+    "prompt_was_enriched_by_rl": true,
+    "notes": {
+      "gam_excerpt_stability": "GAM focus points are filtered to suppress stable zero-failure trend lines; when weak signals are absent, prompt enrichment favors risk/action context plus a run-to-run trend delta focus point.",
+      "rl_influence": "RL influences scenario mutation, scenario selection, and training updates. GAM controls memory retrieval; both can influence the final prompt."
+    },
+    "scenario_generation": {
+      "engine": "llm_primary",
+      "llm_enabled": true,
+      "llm_mode": "auto",
+      "llm_model": "gpt-4.1-mini",
+      "llm_stats": {
+        "scenario_calls": 1,
+        "scenario_success": 1,
+        "scenario_errors": 0,
+        "scenario_parse_failures": 0,
+        "scenario_schema_rejections": 0
+      },
+      "llm_diagnostics": {
+        "status": "accepted",
+        "response_mode": "json_schema",
+        "parse_diagnostics": {
+          "status": "ok",
+          "parse_attempts": 1,
+          "parse_failures": 0,
+          "strategy": "raw",
+          "errors": []
+        },
+        "candidate_rows": 19,
+        "accepted_rows": 18,
+        "drop_counts": {
+          "duplicate": 1
+        }
+      },
+      "base_scenario_count": 20,
+      "happy_path_guardrail": {
+        "required_operations": 4,
+        "covered_operations_before": 4,
+        "added": 0,
+        "missing_after": 0
+      },
+      "workflow_guardrail": {
+        "workflow_candidates": 1,
+        "added_sequence_probes": 1,
+        "added_order_unmet": 1
+      },
+      "base_source": "llm_base",
+      "degraded": false
+    }
+  },
+  "scenario_generation_trace": {
+    "effective_prompt_present": true,
+    "base_scenario_count": 20,
+    "trace_steps": [
+      {
+        "step": 1,
+        "scenario_name": "GET /products - Happy Path",
+        "source": "llm_base",
+        "thought": "Target happy_path for GET /products",
+        "action": "Generate test with expected_status=200, params=0, body=0",
+        "observation_goal": "positive_path"
+      },
+      {
+        "step": 2,
+        "scenario_name": "GET /products - Missing Auth Token",
+        "source": "llm_base",
+        "thought": "Target authentication for GET /products",
+        "action": "Generate test with expected_status=401, params=0, body=0",
+        "observation_goal": "negative_path"
+      },
+      {
+        "step": 3,
+        "scenario_name": "POST /products - Happy Path",
+        "source": "llm_base",
+        "thought": "Target happy_path for POST /products",
+        "action": "Generate test with expected_status=201, params=0, body=1",
+        "observation_goal": "positive_path"
+      },
+      {
+        "step": 4,
+        "scenario_name": "POST /products - Missing Auth Token",
+        "source": "llm_base",
+        "thought": "Target authentication for POST /products",
+        "action": "Generate test with expected_status=401, params=0, body=1",
+        "observation_goal": "negative_path"
+      },
+      {
+        "step": 5,
+        "scenario_name": "POST /products - Invalid Body Data",
+        "source": "llm_base",
+        "thought": "Target input_validation for POST /products",
+        "action": "Generate test with expected_status=400, params=0, body=1",
+        "observation_goal": "negative_path"
+      },
+      {
+        "step": 6,
+        "scenario_name": "POST /orders - Happy Path",
+        "source": "llm_base",
+        "thought": "Target happy_path for POST /orders",
+        "action": "Generate test with expected_status=201, params=0, body=1",
+        "observation_goal": "positive_path"
+      },
+      {
+        "step": 7,
+        "scenario_name": "POST /orders - Missing Auth Token",
+        "source": "llm_base",
+        "thought": "Target authentication for POST /orders",
+        "action": "Generate test with expected_status=401, params=0, body=1",
+        "observation_goal": "negative_path"
+      },
+      {
+        "step": 8,
+        "scenario_name": "POST /orders - Invalid Product ID Format",
+        "source": "llm_base",
+        "thought": "Target input_validation for POST /orders",
+        "action": "Generate test with expected_status=400, params=0, body=1",
+        "observation_goal": "negative_path"
+      },
+      {
+        "step": 9,
+        "scenario_name": "GET /orders/{orderId} - Happy Path",
+        "source": "llm_base",
+        "thought": "Target happy_path for GET /orders/{orderId}",
+        "action": "Generate test with expected_status=200, params=1, body=0",
+        "observation_goal": "positive_path"
+      },
+      {
+        "step": 10,
+        "scenario_name": "GET /orders/{orderId} - Missing Auth Token",
+        "source": "llm_base",
+        "thought": "Target authentication for GET /orders/{orderId}",
+        "action": "Generate test with expected_status=401, params=1, body=0",
+        "observation_goal": "negative_path"
+      },
+      {
+        "step": 11,
+        "scenario_name": "GET /orders/{orderId} - Malformed orderId",
+        "source": "llm_base",
+        "thought": "Target input_validation for GET /orders/{orderId}",
+        "action": "Generate test with expected_status=400, params=1, body=0",
+        "observation_goal": "negative_path"
+      },
+      {
+        "step": 12,
+        "scenario_name": "GET /orders/{orderId} - Empty orderId",
+        "source": "llm_base",
+        "thought": "Target input_validation for GET /orders/{orderId}",
+        "action": "Generate test with expected_status=404, params=1, body=0",
+        "observation_goal": "negative_path"
+      },
+      {
+        "step": 13,
+        "scenario_name": "POST /orders - Dependency Failure",
+        "source": "llm_base",
+        "thought": "Target error_handling for POST /orders",
+        "action": "Generate test with expected_status=503, params=0, body=1",
+        "observation_goal": "positive_path"
+      },
+      {
+        "step": 14,
+        "scenario_name": "POST /products - Authorization Failure",
+        "source": "llm_base",
+        "thought": "Target authorization for POST /products",
+        "action": "Generate test with expected_status=401, params=0, body=1",
+        "observation_goal": "negative_path"
+      },
+      {
+        "step": 15,
+        "scenario_name": "GET /products - Boundary Test Large Page Size",
+        "source": "llm_base",
+        "thought": "Target boundary_testing for GET /products",
+        "action": "Generate test with expected_status=401, params=1, body=0",
+        "observation_goal": "negative_path"
+      },
+      {
+        "step": 16,
+        "scenario_name": "GET /orders/{orderId} - Security Test SQL Injection",
+        "source": "llm_base",
+        "thought": "Target security for GET /orders/{orderId}",
+        "action": "Generate test with expected_status=400, params=1, body=0",
+        "observation_goal": "negative_path"
+      },
+      {
+        "step": 17,
+        "scenario_name": "POST /orders - Edge Case Zero Quantity",
+        "source": "llm_base",
+        "thought": "Target edge_cases for POST /orders",
+        "action": "Generate test with expected_status=400, params=0, body=1",
+        "observation_goal": "negative_path"
+      },
+      {
+        "step": 18,
+        "scenario_name": "GET /products - Performance Test",
+        "source": "llm_base",
+        "thought": "Target performance for GET /products",
+        "action": "Generate test with expected_status=200, params=0, body=0",
+        "observation_goal": "positive_path"
+      },
+      {
+        "step": 19,
+        "scenario_name": "test_get_orders_orderId_integration_sequence_probe",
+        "source": "llm_base",
+        "thought": "Target integration for GET /orders/{orderId}",
+        "action": "Generate test with expected_status=200, params=1, body=0",
+        "observation_goal": "positive_path"
+      },
+      {
+        "step": 20,
+        "scenario_name": "test_get_orders_orderId_integration_order_unmet",
+        "source": "llm_base",
+        "thought": "Target integration for GET /orders/{orderId}",
+        "action": "Generate test with expected_status=404, params=1, body=0",
+        "observation_goal": "negative_path"
+      }
+    ]
+  },
+  "scenario_context": {
+    "run_count_before": 2,
+    "run_count_after": 3,
+    "counts": {
+      "base_generated": 20,
+      "candidate_total": 61,
+      "selected_total": 16,
+      "selected_new_vs_history": 14,
+      "selected_historical_weak_patterns": 2
+    },
+    "source_breakdown": {
+      "base_generated": {
+        "llm_base": 20,
+        "heuristic_base": 0,
+        "rl_mutation": 0,
+        "rl_history_seed": 0
+      },
+      "candidate_pool": {
+        "llm_base": 20,
+        "heuristic_base": 0,
+        "rl_mutation": 22,
+        "rl_history_seed": 19
+      },
+      "selected": {
+        "llm_base": 5,
+        "heuristic_base": 0,
+        "rl_mutation": 5,
+        "rl_history_seed": 6
+      }
+    },
+    "selected_scenarios": [
+      {
+        "name": "GET /orders/{orderId} - Happy Path",
+        "fingerprint": "GET|/orders/{orderId}|happy_path|200|body=0|params=1",
+        "source": "llm_base",
+        "mutation_strategy": "",
+        "method": "GET",
+        "endpoint": "/orders/{orderId}",
+        "test_type": "happy_path",
+        "expected_status": 200,
+        "selection_reason": "forced_weak_replay",
+        "selection_score": -0.0795,
+        "selection_uncertainty": 0.4384,
+        "historical_seen_before": true,
+        "historical_attempts_before": 6,
+        "historical_failure_rate_before": 1.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      },
+      {
+        "name": "GET /products - Happy Path",
+        "fingerprint": "GET|/products|happy_path|200|body=0|params=0",
+        "source": "llm_base",
+        "mutation_strategy": "",
+        "method": "GET",
+        "endpoint": "/products",
+        "test_type": "happy_path",
+        "expected_status": 200,
+        "selection_reason": "forced_weak_replay",
+        "selection_score": 0.0674,
+        "selection_uncertainty": 0.4472,
+        "historical_seen_before": true,
+        "historical_attempts_before": 6,
+        "historical_failure_rate_before": 1.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      },
+      {
+        "name": "GET /products - Boundary Test Large Page Size",
+        "fingerprint": "GET|/products|boundary_testing|401|body=0|params=1",
+        "source": "llm_base",
+        "mutation_strategy": "",
+        "method": "GET",
+        "endpoint": "/products",
+        "test_type": "boundary_testing",
+        "expected_status": 401,
+        "selection_reason": "uncertainty_coverage",
+        "selection_score": 1.1755,
+        "selection_uncertainty": 0.5743,
+        "historical_seen_before": false,
+        "historical_attempts_before": 0,
+        "historical_failure_rate_before": 0.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      },
+      {
+        "name": "GET /products - Performance Test",
+        "fingerprint": "GET|/products|performance|200|body=0|params=0",
+        "source": "llm_base",
+        "mutation_strategy": "",
+        "method": "GET",
+        "endpoint": "/products",
+        "test_type": "performance",
+        "expected_status": 200,
+        "selection_reason": "uncertainty_coverage",
+        "selection_score": 0.0609,
+        "selection_uncertainty": 0.5944,
+        "historical_seen_before": false,
+        "historical_attempts_before": 0,
+        "historical_failure_rate_before": 0.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      },
+      {
+        "name": "POST /orders - Dependency Failure",
+        "fingerprint": "POST|/orders|error_handling|503|body=1|params=0",
+        "source": "llm_base",
+        "mutation_strategy": "",
+        "method": "POST",
+        "endpoint": "/orders",
+        "test_type": "error_handling",
+        "expected_status": 503,
+        "selection_reason": "uncertainty_coverage",
+        "selection_score": 0.5542,
+        "selection_uncertainty": 0.6106,
+        "historical_seen_before": false,
+        "historical_attempts_before": 0,
+        "historical_failure_rate_before": 0.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      },
+      {
+        "name": "test_post_products_rl_history_seed_input_validation_400",
+        "fingerprint": "POST|/products|input_validation|400|body=0|params=0|mut=history_seed",
+        "source": "rl_history_seed",
+        "mutation_strategy": "history_seed",
+        "method": "POST",
+        "endpoint": "/products",
+        "test_type": "input_validation",
+        "expected_status": 400,
+        "selection_reason": "core_type_coverage",
+        "selection_score": 1.6975,
+        "selection_uncertainty": 0.3964,
+        "historical_seen_before": false,
+        "historical_attempts_before": 0,
+        "historical_failure_rate_before": 0.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      },
+      {
+        "name": "test_get_orders_orderId_rl_history_seed_happy_path_200",
+        "fingerprint": "GET|/orders/{orderId}|happy_path|200|body=0|params=1|mut=history_seed",
+        "source": "rl_history_seed",
+        "mutation_strategy": "history_seed",
+        "method": "GET",
+        "endpoint": "/orders/{orderId}",
+        "test_type": "happy_path",
+        "expected_status": 200,
+        "selection_reason": "happy_path_coverage",
+        "selection_score": 0.0205,
+        "selection_uncertainty": 0.4384,
+        "historical_seen_before": false,
+        "historical_attempts_before": 0,
+        "historical_failure_rate_before": 0.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      },
+      {
+        "name": "test_get_products_rl_history_seed_happy_path_200",
+        "fingerprint": "GET|/products|happy_path|200|body=0|params=0|mut=history_seed",
+        "source": "rl_history_seed",
+        "mutation_strategy": "history_seed",
+        "method": "GET",
+        "endpoint": "/products",
+        "test_type": "happy_path",
+        "expected_status": 200,
+        "selection_reason": "happy_path_coverage",
+        "selection_score": 0.1674,
+        "selection_uncertainty": 0.4472,
+        "historical_seen_before": false,
+        "historical_attempts_before": 0,
+        "historical_failure_rate_before": 0.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      },
+      {
+        "name": "test_post_orders_rl_history_seed_happy_path_201",
+        "fingerprint": "POST|/orders|happy_path|201|body=1|params=0|mut=history_seed",
+        "source": "rl_history_seed",
+        "mutation_strategy": "history_seed",
+        "method": "POST",
+        "endpoint": "/orders",
+        "test_type": "happy_path",
+        "expected_status": 201,
+        "selection_reason": "happy_path_coverage",
+        "selection_score": 0.142,
+        "selection_uncertainty": 0.4254,
+        "historical_seen_before": false,
+        "historical_attempts_before": 0,
+        "historical_failure_rate_before": 0.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      },
+      {
+        "name": "test_post_products_rl_history_seed_happy_path_201",
+        "fingerprint": "POST|/products|happy_path|201|body=1|params=0|mut=history_seed",
+        "source": "rl_history_seed",
+        "mutation_strategy": "history_seed",
+        "method": "POST",
+        "endpoint": "/products",
+        "test_type": "happy_path",
+        "expected_status": 201,
+        "selection_reason": "happy_path_coverage",
+        "selection_score": 0.1085,
+        "selection_uncertainty": 0.381,
+        "historical_seen_before": false,
+        "historical_attempts_before": 0,
+        "historical_failure_rate_before": 0.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      },
+      {
+        "name": "test_get_products_rl_history_seed_authentication_401",
+        "fingerprint": "GET|/products|authentication|401|body=0|params=1|mut=history_seed",
+        "source": "rl_history_seed",
+        "mutation_strategy": "history_seed",
+        "method": "GET",
+        "endpoint": "/products",
+        "test_type": "authentication",
+        "expected_status": 401,
+        "selection_reason": "uncertainty_coverage",
+        "selection_score": 1.6093,
+        "selection_uncertainty": 0.5587,
+        "historical_seen_before": false,
+        "historical_attempts_before": 0,
+        "historical_failure_rate_before": 0.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      },
+      {
+        "name": "GET /products - Happy Path_rl_missing_auth",
+        "fingerprint": "GET|/products|authentication|401|body=0|params=0|mut=missing_auth",
+        "source": "rl_mutation",
+        "mutation_strategy": "missing_auth",
+        "method": "GET",
+        "endpoint": "/products",
+        "test_type": "authentication",
+        "expected_status": 401,
+        "selection_reason": "core_type_coverage",
+        "selection_score": 1.695,
+        "selection_uncertainty": 0.4329,
+        "historical_seen_before": false,
+        "historical_attempts_before": 0,
+        "historical_failure_rate_before": 0.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      },
+      {
+        "name": "POST /orders - Happy Path_rl_learned_below_min_quantity",
+        "fingerprint": "POST|/orders|boundary_testing|400|body=1|params=0|mut=learned_numeric_underflow",
+        "source": "rl_mutation",
+        "mutation_strategy": "learned_numeric_underflow",
+        "method": "POST",
+        "endpoint": "/orders",
+        "test_type": "boundary_testing",
+        "expected_status": 400,
+        "selection_reason": "core_type_coverage",
+        "selection_score": 1.6284,
+        "selection_uncertainty": 0.4057,
+        "historical_seen_before": false,
+        "historical_attempts_before": 0,
+        "historical_failure_rate_before": 0.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      },
+      {
+        "name": "POST /products - Happy Path_rl_missing_required_name",
+        "fingerprint": "POST|/products|error_handling|400|body=1|params=0|mut=missing_required_field",
+        "source": "rl_mutation",
+        "mutation_strategy": "missing_required_field",
+        "method": "POST",
+        "endpoint": "/products",
+        "test_type": "error_handling",
+        "expected_status": 400,
+        "selection_reason": "core_type_coverage",
+        "selection_score": 1.6055,
+        "selection_uncertainty": 0.3809,
+        "historical_seen_before": false,
+        "historical_attempts_before": 0,
+        "historical_failure_rate_before": 0.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      },
+      {
+        "name": "GET /products - Boundary Test Large Page Size_rl_missing_auth",
+        "fingerprint": "GET|/products|authentication|401|body=0|params=1|mut=missing_auth",
+        "source": "rl_mutation",
+        "mutation_strategy": "missing_auth",
+        "method": "GET",
+        "endpoint": "/products",
+        "test_type": "authentication",
+        "expected_status": 401,
+        "selection_reason": "uncertainty_coverage",
+        "selection_score": 1.6093,
+        "selection_uncertainty": 0.5587,
+        "historical_seen_before": false,
+        "historical_attempts_before": 0,
+        "historical_failure_rate_before": 0.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      },
+      {
+        "name": "GET /products - Happy Path_rl_query_fuzz",
+        "fingerprint": "GET|/products|security|400|body=0|params=1|mut=query_fuzz",
+        "source": "rl_mutation",
+        "mutation_strategy": "query_fuzz",
+        "method": "GET",
+        "endpoint": "/products",
+        "test_type": "security",
+        "expected_status": 400,
+        "selection_reason": "uncertainty_coverage",
+        "selection_score": 1.1842,
+        "selection_uncertainty": 0.5423,
+        "historical_seen_before": false,
+        "historical_attempts_before": 0,
+        "historical_failure_rate_before": 0.0,
+        "passed": false,
+        "verdict": "fail",
+        "actual_status": 404
+      }
+    ],
+    "notes": {
+      "llm_base": "Scenarios directly generated from prompt + spec.",
+      "heuristic_base": "Scenarios generated by deterministic fallback when LLM generation fails or is disabled.",
+      "rl_mutation": "Variants added by RL mutation strategies.",
+      "rl_history_seed": "Scenarios synthesized from historical failure patterns."
+    }
+  },
+  "generated_test_files": {
+    "python_pytest": "/Users/sjoybrata/Desktop/reinforcement-agent/.qa_specialist_workspace/generated_tests/test_api.py"
+  },
+  "generated_script_execution": {
+    "kind": "python_pytest",
+    "status": "executed",
+    "executed": true,
+    "script_path": "/Users/sjoybrata/Desktop/reinforcement-agent/.qa_specialist_workspace/generated_tests/test_api.py",
+    "total_tests": 16,
+    "passed_tests": 0,
+    "failed_tests": 16,
+    "pass_rate": 0.0,
+    "execution_ms": 38.235,
+    "results": [
+      {
+        "name": "test_GET_orders_orderId_Happy_Path",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 1.167
+      },
+      {
+        "name": "test_GET_products_Boundary_Test_Large_Page_Size",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 0.687
+      },
+      {
+        "name": "test_GET_products_Boundary_Test_Large_Page_Size_rl_missing_auth",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 0.619
+      },
+      {
+        "name": "test_GET_products_Happy_Path",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 0.569
+      },
+      {
+        "name": "test_GET_products_Happy_Path_rl_missing_auth",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 0.515
+      },
+      {
+        "name": "test_GET_products_Happy_Path_rl_query_fuzz",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 0.518
+      },
+      {
+        "name": "test_GET_products_Performance_Test",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 0.472
+      },
+      {
+        "name": "test_POST_orders_Dependency_Failure",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 0.499
+      },
+      {
+        "name": "test_POST_orders_Happy_Path_rl_learned_below_min_quantity",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 0.531
+      },
+      {
+        "name": "test_POST_products_Happy_Path_rl_missing_required_name",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 0.565
+      },
+      {
+        "name": "test_get_orders_orderId_rl_history_seed_happy_path_200",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 0.495
+      },
+      {
+        "name": "test_get_products_rl_history_seed_authentication_401",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 0.49
+      },
+      {
+        "name": "test_get_products_rl_history_seed_happy_path_200",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 0.506
+      },
+      {
+        "name": "test_post_orders_rl_history_seed_happy_path_201",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 0.505
+      },
+      {
+        "name": "test_post_products_rl_history_seed_happy_path_201",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 0.505
+      },
+      {
+        "name": "test_post_products_rl_history_seed_input_validation_400",
+        "passed": false,
+        "error": "AssertionError",
+        "duration_ms": 0.52
+      }
+    ]
+  },
+  "scenario_results": [
+    {
+      "name": "test_get_orders_orderId_rl_history_seed_happy_path_200",
+      "test_type": "happy_path",
+      "method": "GET",
+      "endpoint_template": "/orders/{orderId}",
+      "endpoint_resolved": "/orders/123",
+      "expected_status": 200,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 2.298,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 200,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            200,
+            401,
+            404
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "test_get_products_rl_history_seed_happy_path_200",
+      "test_type": "happy_path",
+      "method": "GET",
+      "endpoint_template": "/products",
+      "endpoint_resolved": "/products",
+      "expected_status": 200,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 0.841,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 200,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            200,
+            401
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "test_post_orders_rl_history_seed_happy_path_201",
+      "test_type": "happy_path",
+      "method": "POST",
+      "endpoint_template": "/orders",
+      "endpoint_resolved": "/orders",
+      "expected_status": 201,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 0.681,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 201,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            201,
+            400,
+            401
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "test_post_products_rl_history_seed_happy_path_201",
+      "test_type": "happy_path",
+      "method": "POST",
+      "endpoint_template": "/products",
+      "endpoint_resolved": "/products",
+      "expected_status": 201,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 0.606,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 201,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            201,
+            400,
+            401
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /products - Happy Path_rl_missing_auth",
+      "test_type": "authentication",
+      "method": "GET",
+      "endpoint_template": "/products",
+      "endpoint_resolved": "/products",
+      "expected_status": 401,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 0.568,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 401,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            200,
+            401
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "test_post_products_rl_history_seed_input_validation_400",
+      "test_type": "input_validation",
+      "method": "POST",
+      "endpoint_template": "/products",
+      "endpoint_resolved": "/products",
+      "expected_status": 400,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 0.562,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 400,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            201,
+            400,
+            401
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST /products - Happy Path_rl_missing_required_name",
+      "test_type": "error_handling",
+      "method": "POST",
+      "endpoint_template": "/products",
+      "endpoint_resolved": "/products",
+      "expected_status": 400,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 0.539,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 400,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            201,
+            400,
+            401
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST /orders - Happy Path_rl_learned_below_min_quantity",
+      "test_type": "boundary_testing",
+      "method": "POST",
+      "endpoint_template": "/orders",
+      "endpoint_resolved": "/orders",
+      "expected_status": 400,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 0.577,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 400,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            201,
+            400,
+            401
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /orders/{orderId} - Happy Path",
+      "test_type": "happy_path",
+      "method": "GET",
+      "endpoint_template": "/orders/{orderId}",
+      "endpoint_resolved": "/orders/abc123",
+      "expected_status": 200,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 0.512,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 200,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            200,
+            401,
+            404
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /products - Happy Path",
+      "test_type": "happy_path",
+      "method": "GET",
+      "endpoint_template": "/products",
+      "endpoint_resolved": "/products",
+      "expected_status": 200,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 0.493,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 200,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            200,
+            401
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST /orders - Dependency Failure",
+      "test_type": "error_handling",
+      "method": "POST",
+      "endpoint_template": "/orders",
+      "endpoint_resolved": "/orders",
+      "expected_status": 503,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 0.509,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 503,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            201,
+            400,
+            401
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /products - Performance Test",
+      "test_type": "performance",
+      "method": "GET",
+      "endpoint_template": "/products",
+      "endpoint_resolved": "/products",
+      "expected_status": 200,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 0.48,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 200,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            200,
+            401
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /products - Boundary Test Large Page Size",
+      "test_type": "boundary_testing",
+      "method": "GET",
+      "endpoint_template": "/products",
+      "endpoint_resolved": "/products",
+      "expected_status": 401,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 0.576,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 401,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            200,
+            401
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /products - Boundary Test Large Page Size_rl_missing_auth",
+      "test_type": "authentication",
+      "method": "GET",
+      "endpoint_template": "/products",
+      "endpoint_resolved": "/products",
+      "expected_status": 401,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 0.527,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 401,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            200,
+            401
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "test_get_products_rl_history_seed_authentication_401",
+      "test_type": "authentication",
+      "method": "GET",
+      "endpoint_template": "/products",
+      "endpoint_resolved": "/products",
+      "expected_status": 401,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 0.53,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 401,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            200,
+            401
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /products - Happy Path_rl_query_fuzz",
+      "test_type": "security",
+      "method": "GET",
+      "endpoint_template": "/products",
+      "endpoint_resolved": "/products",
+      "expected_status": 400,
+      "actual_status": 404,
+      "verdict": "fail",
+      "passed": false,
+      "duration_ms": 0.508,
+      "error": "",
+      "response_excerpt": "{\"detail\": \"Not Found\"}",
+      "verification": {
+        "passed": false,
+        "verdict": "fail",
+        "status_check": {
+          "expected_status": 400,
+          "actual_status": 404,
+          "corrected_expected_status": null,
+          "corrected": false,
+          "matched": false,
+          "suspect_reason": "",
+          "documented_statuses": [
+            200,
+            401
+          ]
+        },
+        "contract_check": {
+          "checked": true,
+          "schema_found": false,
+          "valid": true,
+          "issues": [
+            "no_response_schema_defined_used_json_sanity_check"
+          ]
+        }
+      }
+    }
+  ],
+  "spec_intelligence": {
+    "operations_total": 4,
+    "dependency_graph": {
+      "edge_count": 1,
+      "edges": [
+        {
+          "producer": "POST /orders",
+          "consumer": "GET /orders/{orderId}",
+          "reason": "path_parameter_dependency",
+          "resource": "orders"
+        }
+      ]
+    },
+    "workflow_candidates": [
+      {
+        "sequence": [
+          "POST /orders",
+          "GET /orders/{orderId}"
+        ],
+        "reason": "path_parameter_dependency",
+        "resource": "orders"
+      }
+    ],
+    "risk_map": {
+      "top_risky_operations": [
+        {
+          "operation_key": "POST /products",
+          "method": "POST",
+          "endpoint": "/products",
+          "auth_required": true,
+          "write_operation": true,
+          "schema_complexity": 1.4,
+          "historical_attempts": 4,
+          "historical_failure_rate": 1.0,
+          "risk_score": 0.7525,
+          "required_fields": [
+            "name",
+            "price"
+          ],
+          "path_params": [],
+          "query_params": []
+        },
+        {
+          "operation_key": "POST /orders",
+          "method": "POST",
+          "endpoint": "/orders",
+          "auth_required": true,
+          "write_operation": true,
+          "schema_complexity": 1.25,
+          "historical_attempts": 4,
+          "historical_failure_rate": 1.0,
+          "risk_score": 0.7469,
+          "required_fields": [
+            "productId",
+            "quantity"
+          ],
+          "path_params": [],
+          "query_params": []
+        },
+        {
+          "operation_key": "GET /products",
+          "method": "GET",
+          "endpoint": "/products",
+          "auth_required": true,
+          "write_operation": false,
+          "schema_complexity": 0.0,
+          "historical_attempts": 1,
+          "historical_failure_rate": 1.0,
+          "risk_score": 0.5,
+          "required_fields": [],
+          "path_params": [],
+          "query_params": []
+        },
+        {
+          "operation_key": "GET /orders/{orderId}",
+          "method": "GET",
+          "endpoint": "/orders/{orderId}",
+          "auth_required": true,
+          "write_operation": false,
+          "schema_complexity": 0.0,
+          "historical_attempts": 1,
+          "historical_failure_rate": 1.0,
+          "risk_score": 0.5,
+          "required_fields": [],
+          "path_params": [
+            "orderId"
+          ],
+          "query_params": []
+        }
+      ]
+    }
+  },
+  "oss_tooling": {
+    "packages": {
+      "schemathesis": false,
+      "hypothesis": false,
+      "openapi_core": false,
+      "openapi_spec_validator": false,
+      "pact": false,
+      "locust": false,
+      "testcontainers": false
+    },
+    "binaries": {
+      "restler": false,
+      "evomaster": false,
+      "zap_cli": false,
+      "k6": false
+    },
+    "spec_validation": {
+      "validator": "openapi_spec_validator",
+      "available": false,
+      "valid": null,
+      "error": ""
+    }
+  },
+  "oss_checks": {
+    "openapi_spec_validation": {
+      "validator": "openapi_spec_validator",
+      "available": false,
+      "valid": null,
+      "error": ""
+    },
+    "hypothesis_shrinker": {
+      "status": "active",
+      "mode": "in_agent_greedy_shrinker",
+      "notes": "Failed payload minimization runs in-agent for reproducible failures."
+    },
+    "schemathesis_stateful_smoke": {
+      "available": false,
+      "status": "skipped",
+      "reason": "schemathesis_not_installed"
+    },
+    "restler_sequence_seed": {
+      "available": false,
+      "status": "skipped",
+      "reason": "restler_cli_not_found"
+    },
+    "evomaster_search_based": {
+      "available": false,
+      "status": "skipped",
+      "reason": "evomaster_cli_not_found"
+    },
+    "pact_contract_check": {
+      "available": false,
+      "status": "skipped",
+      "reason": "pact_not_installed"
+    },
+    "zap_api_scan": {
+      "available": false,
+      "status": "skipped",
+      "reason": "zap_cli_not_found"
+    },
+    "k6_load_probe": {
+      "available": false,
+      "status": "skipped",
+      "reason": "k6_and_locust_not_available"
+    },
+    "testcontainers_isolation": {
+      "available": false,
+      "status": "skipped",
+      "reason": "testcontainers_not_installed"
+    }
+  },
+  "gam": {
+    "session_id": "fc6e2afb-10c9-448c-b95d-f3cbc025eba4",
+    "memo_page_id": "b3da1924806a857b",
+    "memo_title": "Iteration 4 Analysis: updated api endpoints and parameters: E-commerce API (fc6e2afb)",
+    "lossless_page_ids": [
+      "a117c3415eac6122",
+      "162aa338fc75be2a"
+    ],
+    "memory_store_path": "/Users/sjoybrata/Desktop/reinforcement-agent/.qa_specialist_workspace/gam_memory_pages.json",
+    "research_plan": [
+      "E-commerce API bearer token authentication failure scenarios",
+      "GET /orders/{orderId} response validation and error handling",
+      "POST /orders boundary tests for order creation",
+      "GET /products response schema validation and error codes",
+      "POST /products authorization and input validation tests",
+      "E-commerce API handling invalid bearer tokens",
+      "GET /orders/{orderId} tests for non-existent orderId",
+      "POST /orders domain-specific risk tests for order data integrity",
+      "failure logs GET /orders/{orderId} happy path",
+      "error messages GET /products happy path",
+      "response bodies POST /orders happy path failures",
+      "test results POST /products endpoint",
+      "failure analysis POST /products tests",
+      "authentication errors bearer token E-commerce API",
+      "validation errors POST /orders endpoint",
+      "boundary tests GET /orders/{orderId} endpoint"
+    ],
+    "research_plan_count": 16,
+    "research_iterations": 2,
+    "research_reflection": "Completed 2 research iterations. Found 6 relevant excerpts.",
+    "research_info_checks": [
+      {
+        "analysis": "The research shows consistent failure (failure_rate=1.0) on the happy path tests for the GET /orders/{orderId}, GET /products, and POST /orders endpoints, despite multiple attempts. The average rewards are negative, indicating poor performance or incorrect behavior. However, the excerpts do not provide detailed diagnostic information, error messages, or insights into why these failures occur. There is also no information on other test types (e.g., edge cases, error handling) or on the POST /products endpoint. Therefore, the current research is insufficient to fully understand the weaknesses or to guide effective improvements.",
+        "request_status": "need_more",
+        "missing": [
+          "Detailed error messages or response bodies from failed attempts",
+          "Diagnostic logs or traces explaining failure causes",
+          "Test results for POST /products endpoint",
+          "Information on other test types beyond happy path",
+          "Context on authentication or request payloads used during tests"
+        ],
+        "next_request": "Retrieve detailed failure logs, error messages, and response bodies for the failed happy path tests on GET /orders/{orderId}, GET /products, and POST /orders endpoints. Also, provide test results and failure analysis for the POST /products endpoint and any other test types executed."
+      },
+      {
+        "analysis": "Completed 2 research iterations. Found 6 relevant excerpts.",
+        "request_status": "complete",
+        "missing": [],
+        "next_request": ""
+      }
+    ],
+    "research_retrieval_trace": [
+      {
+        "iteration": 1,
+        "plan": [
+          "E-commerce API bearer token authentication failure scenarios",
+          "GET /orders/{orderId} response validation and error handling",
+          "POST /orders boundary tests for order creation",
+          "GET /products response schema validation and error codes",
+          "POST /products authorization and input validation tests",
+          "E-commerce API handling invalid bearer tokens",
+          "GET /orders/{orderId} tests for non-existent orderId",
+          "POST /orders domain-specific risk tests for order data integrity"
+        ],
+        "plan_mode": "llm_primary",
+        "search_summary": {
+          "plan_items": 8,
+          "futures_by_kind": {
+            "query": 8,
+            "group": 1,
+            "prior_ids": 1
+          },
+          "results_before_filter": 13,
+          "results_after_filter": 6,
+          "spec_memory_tags": [
+            "e_commerce_api",
+            "spec_c3ebc1397f69182e"
+          ],
+          "explicit_page_ids_used": [],
+          "reranked_count": 6
+        },
+        "reflect_mode": "llm_primary",
+        "request_status": "need_more",
+        "missing": [
+          "Detailed error messages or response bodies from failed attempts",
+          "Diagnostic logs or traces explaining failure causes",
+          "Test results for POST /products endpoint",
+          "Information on other test types beyond happy path",
+          "Context on authentication or request payloads used during tests"
+        ]
+      },
+      {
+        "iteration": 2,
+        "plan": [
+          "failure logs GET /orders/{orderId} happy path",
+          "error messages GET /products happy path",
+          "response bodies POST /orders happy path failures",
+          "test results POST /products endpoint",
+          "failure analysis POST /products tests",
+          "authentication errors bearer token E-commerce API",
+          "validation errors POST /orders endpoint",
+          "boundary tests GET /orders/{orderId} endpoint"
+        ],
+        "plan_mode": "llm_primary",
+        "search_summary": {
+          "plan_items": 8,
+          "futures_by_kind": {
+            "query": 8,
+            "group": 1,
+            "prior_ids": 1
+          },
+          "results_before_filter": 12,
+          "results_after_filter": 6,
+          "spec_memory_tags": [
+            "e_commerce_api",
+            "spec_c3ebc1397f69182e"
+          ],
+          "explicit_page_ids_used": [],
+          "reranked_count": 6
+        },
+        "reflect_mode": "llm_primary",
+        "request_status": "complete",
+        "missing": []
+      }
+    ],
+    "research_engine": {
+      "llm_enabled": true,
+      "llm_mode": "on",
+      "llm_model": "gpt-4.1-mini",
+      "max_reflections": 2,
+      "llm_stats": {
+        "plan_calls": 2,
+        "plan_success": 2,
+        "plan_errors": 0,
+        "reflect_calls": 1,
+        "reflect_success": 1,
+        "reflect_errors": 0
+      },
+      "plan_modes": [
+        "llm_primary",
+        "llm_primary"
+      ],
+      "reflect_modes": [
+        "llm_primary",
+        "llm_primary"
+      ],
+      "iterations": [
+        {
+          "iteration": 1,
+          "plan_mode": "llm_primary",
+          "reflect_mode": "llm_primary",
+          "request_status": "need_more"
+        },
+        {
+          "iteration": 2,
+          "plan_mode": "llm_primary",
+          "reflect_mode": "llm_primary",
+          "request_status": "complete"
+        }
+      ]
+    },
+    "research_excerpt_count": 8,
+    "research_excerpts": [
+      {
+        "source": "memo",
+        "title": "RL Trend Signals: E-commerce API",
+        "tags": [
+          "memo",
+          "learning",
+          "trend",
+          "run_aware",
+          "e_commerce_api",
+          "spec_c3ebc1397f69182e"
+        ],
+        "similarity": 2.09,
+        "excerpt": "- GET /orders/{orderId} | happy_path | expected=200 | attempts=3 | failure_rate=1.0 | avg_reward=-1.1003 | - last_run_reward=0.6532 | Historical run_count: 2 | Spec: E-commerce API"
+      },
+      {
+        "source": "memo",
+        "title": "RL Learning Signals: E-commerce API",
+        "tags": [
+          "memo",
+          "learning",
+          "rl_signal",
+          "weakness",
+          "e_commerce_api",
+          "spec_c3ebc1397f69182e"
+        ],
+        "similarity": 1.74,
+        "excerpt": "- GET /orders/{orderId} | happy path | expect 200 | failure_rate=1.0 | avg_reward=-1.1003 | attempts=3 | Historical run_count: 2 | Spec: E-commerce API"
+      },
+      {
+        "source": "memo",
+        "title": "Spec Context Signals: E-commerce API",
+        "tags": [
+          "memo",
+          "spec_context",
+          "dynamic",
+          "run_aware",
+          "e_commerce_api",
+          "spec_c3ebc1397f69182e"
+        ],
+        "similarity": 1.42,
+        "excerpt": "- GET /orders/{orderId} | happy path | expected=200 | failure_rate=1.0 | Historical run_count: 2 | Spec: E-commerce API"
+      },
+      {
+        "source": "memo",
+        "title": "RL Trend Signals: E-commerce API",
+        "tags": [
+          "memo",
+          "learning",
+          "trend",
+          "run_aware",
+          "e_commerce_api",
+          "spec_c3ebc1397f69182e"
+        ],
+        "similarity": 1.1833,
+        "excerpt": "- GET /orders/{orderId} | happy_path | expected=200 | attempts=1 | failure_rate=1.0 | avg_reward=-1.1004 | - last_run_reward=0.5957 | Historical run_count: 1 | Spec: E-commerce API"
+      },
+      {
+        "source": "memo",
+        "title": "Spec Context Signals: E-commerce API",
+        "tags": [
+          "memo",
+          "spec_context",
+          "dynamic",
+          "run_aware",
+          "e_commerce_api",
+          "spec_c3ebc1397f69182e"
+        ],
+        "similarity": 0.6373,
+        "excerpt": "Historical run_count: 1 | Spec: E-commerce API"
+      },
+      {
+        "title": "Schemathesis Stateful Testing",
+        "source": "trusted_docs_fallback",
+        "tags": [
+          "trusted_docs",
+          "schemathesis",
+          "stateful"
+        ],
+        "excerpt": "Spec risk action (E-commerce API): prioritize stateful sequences for producer->consumer operations and verify dependent IDs.",
+        "url": "https://schemathesis.readthedocs.io/en/stable/"
+      },
+      {
+        "title": "Agent Lightning RL Focus",
+        "source": "trusted_docs_fallback",
+        "tags": [
+          "trusted_docs",
+          "agent_lightning",
+          "rl"
+        ],
+        "excerpt": "Weak RL pattern: GET /orders/{orderId} (happy_path) expected 200, failure_rate=1.0. Trend delta action: track run-over-run failure-rate deltas with checkpointed policy updates.",
+        "url": "https://arxiv.org/abs/2508.03680"
+      },
+      {
+        "title": "GAM Context Quality Contract",
+        "source": "trusted_docs_fallback",
+        "tags": [
+          "trusted_docs",
+          "gam",
+          "context_pack"
+        ],
+        "excerpt": "Next action: enrich memory with non-generic signals for auth=bearer including one trend delta, one spec risk, and one concrete mutation action.",
+        "url": "https://arxiv.org/abs/2511.18423"
+      }
+    ],
+    "fallback_external_excerpts": [
+      {
+        "title": "Schemathesis Stateful Testing",
+        "source": "trusted_docs_fallback",
+        "tags": [
+          "trusted_docs",
+          "schemathesis",
+          "stateful"
+        ],
+        "excerpt": "Spec risk action (E-commerce API): prioritize stateful sequences for producer->consumer operations and verify dependent IDs.",
+        "url": "https://schemathesis.readthedocs.io/en/stable/"
+      },
+      {
+        "title": "Agent Lightning RL Focus",
+        "source": "trusted_docs_fallback",
+        "tags": [
+          "trusted_docs",
+          "agent_lightning",
+          "rl"
+        ],
+        "excerpt": "Weak RL pattern: GET /orders/{orderId} (happy_path) expected 200, failure_rate=1.0. Trend delta action: track run-over-run failure-rate deltas with checkpointed policy updates.",
+        "url": "https://arxiv.org/abs/2508.03680"
+      },
+      {
+        "title": "GAM Context Quality Contract",
+        "source": "trusted_docs_fallback",
+        "tags": [
+          "trusted_docs",
+          "gam",
+          "context_pack"
+        ],
+        "excerpt": "Next action: enrich memory with non-generic signals for auth=bearer including one trend delta, one spec risk, and one concrete mutation action.",
+        "url": "https://arxiv.org/abs/2511.18423"
+      }
+    ],
+    "context_pack": {
+      "status": "needs_retry",
+      "quality_score": 1.0,
+      "selected_pages": [
+        {
+          "page_id": "",
+          "title": "RL Trend Signals: E-commerce API",
+          "source": "memo",
+          "tags": [
+            "memo",
+            "learning",
+            "trend",
+            "run_aware",
+            "e_commerce_api",
+            "spec_c3ebc1397f69182e"
+          ],
+          "similarity": 2.09,
+          "excerpt": "- GET /orders/{orderId} | happy_path | expected=200 | attempts=3 | failure_rate=1.0 | avg_reward=-1.1003 | - last_run_reward=0.6532 | Historical run_count: 2 | Spec: E-commerce API"
+        },
+        {
+          "page_id": "",
+          "title": "RL Learning Signals: E-commerce API",
+          "source": "memo",
+          "tags": [
+            "memo",
+            "learning",
+            "rl_signal",
+            "weakness",
+            "e_commerce_api",
+            "spec_c3ebc1397f69182e"
+          ],
+          "similarity": 1.74,
+          "excerpt": "- GET /orders/{orderId} | happy path | expect 200 | failure_rate=1.0 | avg_reward=-1.1003 | attempts=3 | Historical run_count: 2 | Spec: E-commerce API"
+        },
+        {
+          "page_id": "",
+          "title": "Spec Context Signals: E-commerce API",
+          "source": "memo",
+          "tags": [
+            "memo",
+            "spec_context",
+            "dynamic",
+            "run_aware",
+            "e_commerce_api",
+            "spec_c3ebc1397f69182e"
+          ],
+          "similarity": 1.42,
+          "excerpt": "- GET /orders/{orderId} | happy path | expected=200 | failure_rate=1.0 | Historical run_count: 2 | Spec: E-commerce API"
+        },
+        {
+          "page_id": "",
+          "title": "RL Trend Signals: E-commerce API",
+          "source": "memo",
+          "tags": [
+            "memo",
+            "learning",
+            "trend",
+            "run_aware",
+            "e_commerce_api",
+            "spec_c3ebc1397f69182e"
+          ],
+          "similarity": 1.1833,
+          "excerpt": "- GET /orders/{orderId} | happy_path | expected=200 | attempts=1 | failure_rate=1.0 | avg_reward=-1.1004 | - last_run_reward=0.5957 | Historical run_count: 1 | Spec: E-commerce API"
+        },
+        {
+          "page_id": "",
+          "title": "Spec Context Signals: E-commerce API",
+          "source": "memo",
+          "tags": [
+            "memo",
+            "spec_context",
+            "dynamic",
+            "run_aware",
+            "e_commerce_api",
+            "spec_c3ebc1397f69182e"
+          ],
+          "similarity": 0.6373,
+          "excerpt": "Historical run_count: 1 | Spec: E-commerce API"
+        },
+        {
+          "page_id": "",
+          "title": "Schemathesis Stateful Testing",
+          "source": "trusted_docs_fallback",
+          "tags": [
+            "trusted_docs",
+            "schemathesis",
+            "stateful"
+          ],
+          "similarity": null,
+          "excerpt": "Spec risk action (E-commerce API): prioritize stateful sequences for producer->consumer operations and verify dependent IDs."
+        },
+        {
+          "page_id": "",
+          "title": "Agent Lightning RL Focus",
+          "source": "trusted_docs_fallback",
+          "tags": [
+            "trusted_docs",
+            "agent_lightning",
+            "rl"
+          ],
+          "similarity": null,
+          "excerpt": "Weak RL pattern: GET /orders/{orderId} (happy_path) expected 200, failure_rate=1.0. Trend delta action: track run-over-run failure-rate deltas with checkpointed policy updates."
+        },
+        {
+          "page_id": "",
+          "title": "GAM Context Quality Contract",
+          "source": "trusted_docs_fallback",
+          "tags": [
+            "trusted_docs",
+            "gam",
+            "context_pack"
+          ],
+          "similarity": null,
+          "excerpt": "Next action: enrich memory with non-generic signals for auth=bearer including one trend delta, one spec risk, and one concrete mutation action."
+        }
+      ],
+      "selected_count": 8,
+      "rejected_pages": [],
+      "rejected_count": 0,
+      "rejection_reasons": [
+        {
+          "reason": "missing_contract_items:has_diverse_endpoint_signal,has_diverse_test_type_signal",
+          "severity": "warning"
+        }
+      ],
+      "reflection": "Completed 2 research iterations. Found 6 relevant excerpts.",
+      "contract_checks": {
+        "has_weak_pattern": true,
+        "has_trend_delta": true,
+        "has_spec_risk": true,
+        "has_next_action": true,
+        "weak_pattern_mode": "direct",
+        "has_exploration_proxy": false,
+        "has_diverse_endpoint_signal": false,
+        "has_diverse_test_type_signal": false
+      }
+    },
+    "learning_signal_page_id": "c4648b67babbf370",
+    "learning_trend_page_id": "f8e8ef487ccee3cd",
+    "spec_context_page_id": "a1e12d2df223d006",
+    "excerpt_source_breakdown": {
+      "memo": 5,
+      "trusted_docs_fallback": 3
+    },
+    "excerpt_preview": [
+      {
+        "source": "memo",
+        "title": "RL Trend Signals: E-commerce API",
+        "tags": [
+          "memo",
+          "learning",
+          "trend",
+          "run_aware",
+          "e_commerce_api",
+          "spec_c3ebc1397f69182e"
+        ],
+        "similarity": 2.09,
+        "excerpt": "- GET /orders/{orderId} | happy_path | expected=200 | attempts=3 | failure_rate=1.0 | avg_reward=-1.1003 | - last_run_reward=0.6532 | Historical run_count: 2 | Spec: E-commerce API",
+        "focus_score": 6.2
+      },
+      {
+        "source": "memo",
+        "title": "RL Learning Signals: E-commerce API",
+        "tags": [
+          "memo",
+          "learning",
+          "rl_signal",
+          "weakness",
+          "e_commerce_api",
+          "spec_c3ebc1397f69182e"
+        ],
+        "similarity": 1.74,
+        "excerpt": "- GET /orders/{orderId} | happy path | expect 200 | failure_rate=1.0 | avg_reward=-1.1003 | attempts=3 | Historical run_count: 2 | Spec: E-commerce API",
+        "focus_score": 5.2
+      },
+      {
+        "source": "memo",
+        "title": "Spec Context Signals: E-commerce API",
+        "tags": [
+          "memo",
+          "spec_context",
+          "dynamic",
+          "run_aware",
+          "e_commerce_api",
+          "spec_c3ebc1397f69182e"
+        ],
+        "similarity": 1.42,
+        "excerpt": "- GET /orders/{orderId} | happy path | expected=200 | failure_rate=1.0 | Historical run_count: 2 | Spec: E-commerce API",
+        "focus_score": 4.2
+      },
+      {
+        "source": "memo",
+        "title": "RL Trend Signals: E-commerce API",
+        "tags": [
+          "memo",
+          "learning",
+          "trend",
+          "run_aware",
+          "e_commerce_api",
+          "spec_c3ebc1397f69182e"
+        ],
+        "similarity": 1.1833,
+        "excerpt": "- GET /orders/{orderId} | happy_path | expected=200 | attempts=1 | failure_rate=1.0 | avg_reward=-1.1004 | - last_run_reward=0.5957 | Historical run_count: 1 | Spec: E-commerce API",
+        "focus_score": 6.2
+      },
+      {
+        "source": "memo",
+        "title": "Spec Context Signals: E-commerce API",
+        "tags": [
+          "memo",
+          "spec_context",
+          "dynamic",
+          "run_aware",
+          "e_commerce_api",
+          "spec_c3ebc1397f69182e"
+        ],
+        "similarity": 0.6373,
+        "excerpt": "Historical run_count: 1 | Spec: E-commerce API",
+        "focus_score": -0.8
+      },
+      {
+        "source": "trusted_docs_fallback",
+        "title": "Schemathesis Stateful Testing",
+        "tags": [
+          "trusted_docs",
+          "schemathesis",
+          "stateful"
+        ],
+        "similarity": null,
+        "excerpt": "Spec risk action (E-commerce API): prioritize stateful sequences for producer->consumer operations and verify dependent IDs.",
+        "focus_score": 0.0
+      },
+      {
+        "source": "trusted_docs_fallback",
+        "title": "Agent Lightning RL Focus",
+        "tags": [
+          "trusted_docs",
+          "agent_lightning",
+          "rl"
+        ],
+        "similarity": null,
+        "excerpt": "Weak RL pattern: GET /orders/{orderId} (happy_path) expected 200, failure_rate=1.0. Trend delta action: track run-over-run failure-rate deltas with checkpointed policy updates.",
+        "focus_score": 5.2
+      },
+      {
+        "source": "trusted_docs_fallback",
+        "title": "GAM Context Quality Contract",
+        "tags": [
+          "trusted_docs",
+          "gam",
+          "context_pack"
+        ],
+        "similarity": null,
+        "excerpt": "Next action: enrich memory with non-generic signals for auth=bearer including one trend delta, one spec risk, and one concrete mutation action.",
+        "focus_score": 1.0
+      }
+    ],
+    "diagnostics": {
+      "total_excerpts": 8,
+      "convention_excerpts": 0,
+      "non_convention_excerpts": 8,
+      "source_breakdown": {
+        "memo": 5,
+        "trusted_docs_fallback": 3
+      },
+      "rejected_excerpt_count": 0,
+      "machine_like_excerpt_count": 0,
+      "low_signal_excerpt_count": 0,
+      "actionable_excerpt_count": 5,
+      "warnings": [],
+      "quality_score": 1.0,
+      "excerpt_preview": [
+        {
+          "source": "memo",
+          "title": "RL Trend Signals: E-commerce API",
+          "tags": [
+            "memo",
+            "learning",
+            "trend",
+            "run_aware",
+            "e_commerce_api",
+            "spec_c3ebc1397f69182e"
+          ],
+          "similarity": 2.09,
+          "excerpt": "- GET /orders/{orderId} | happy_path | expected=200 | attempts=3 | failure_rate=1.0 | avg_reward=-1.1003 | - last_run_reward=0.6532 | Historical run_count: 2 | Spec: E-commerce API",
+          "focus_score": 6.2
+        },
+        {
+          "source": "memo",
+          "title": "RL Learning Signals: E-commerce API",
+          "tags": [
+            "memo",
+            "learning",
+            "rl_signal",
+            "weakness",
+            "e_commerce_api",
+            "spec_c3ebc1397f69182e"
+          ],
+          "similarity": 1.74,
+          "excerpt": "- GET /orders/{orderId} | happy path | expect 200 | failure_rate=1.0 | avg_reward=-1.1003 | attempts=3 | Historical run_count: 2 | Spec: E-commerce API",
+          "focus_score": 5.2
+        },
+        {
+          "source": "memo",
+          "title": "Spec Context Signals: E-commerce API",
+          "tags": [
+            "memo",
+            "spec_context",
+            "dynamic",
+            "run_aware",
+            "e_commerce_api",
+            "spec_c3ebc1397f69182e"
+          ],
+          "similarity": 1.42,
+          "excerpt": "- GET /orders/{orderId} | happy path | expected=200 | failure_rate=1.0 | Historical run_count: 2 | Spec: E-commerce API",
+          "focus_score": 4.2
+        },
+        {
+          "source": "memo",
+          "title": "RL Trend Signals: E-commerce API",
+          "tags": [
+            "memo",
+            "learning",
+            "trend",
+            "run_aware",
+            "e_commerce_api",
+            "spec_c3ebc1397f69182e"
+          ],
+          "similarity": 1.1833,
+          "excerpt": "- GET /orders/{orderId} | happy_path | expected=200 | attempts=1 | failure_rate=1.0 | avg_reward=-1.1004 | - last_run_reward=0.5957 | Historical run_count: 1 | Spec: E-commerce API",
+          "focus_score": 6.2
+        },
+        {
+          "source": "memo",
+          "title": "Spec Context Signals: E-commerce API",
+          "tags": [
+            "memo",
+            "spec_context",
+            "dynamic",
+            "run_aware",
+            "e_commerce_api",
+            "spec_c3ebc1397f69182e"
+          ],
+          "similarity": 0.6373,
+          "excerpt": "Historical run_count: 1 | Spec: E-commerce API",
+          "focus_score": -0.8
+        },
+        {
+          "source": "trusted_docs_fallback",
+          "title": "Schemathesis Stateful Testing",
+          "tags": [
+            "trusted_docs",
+            "schemathesis",
+            "stateful"
+          ],
+          "similarity": null,
+          "excerpt": "Spec risk action (E-commerce API): prioritize stateful sequences for producer->consumer operations and verify dependent IDs.",
+          "focus_score": 0.0
+        },
+        {
+          "source": "trusted_docs_fallback",
+          "title": "Agent Lightning RL Focus",
+          "tags": [
+            "trusted_docs",
+            "agent_lightning",
+            "rl"
+          ],
+          "similarity": null,
+          "excerpt": "Weak RL pattern: GET /orders/{orderId} (happy_path) expected 200, failure_rate=1.0. Trend delta action: track run-over-run failure-rate deltas with checkpointed policy updates.",
+          "focus_score": 5.2
+        },
+        {
+          "source": "trusted_docs_fallback",
+          "title": "GAM Context Quality Contract",
+          "tags": [
+            "trusted_docs",
+            "gam",
+            "context_pack"
+          ],
+          "similarity": null,
+          "excerpt": "Next action: enrich memory with non-generic signals for auth=bearer including one trend delta, one spec risk, and one concrete mutation action.",
+          "focus_score": 1.0
+        }
+      ]
+    }
+  },
+  "agent_lightning": {
+    "training_result": {
+      "success": true,
+      "result": {
+        "success": false,
+        "quality_score": 0.6228,
+        "summary": {
+          "total_scenarios": 16,
+          "passed_scenarios": 0,
+          "failed_scenarios": 16,
+          "hard_failed_scenarios": 16,
+          "suspect_scenarios": 0,
+          "blocked_scenarios": 0,
+          "pass_rate": 0.0,
+          "true_pass_rate": 0.0,
+          "pass_threshold": 0.7,
+          "meets_quality_gate": false,
+          "quality_gate_fail_reasons": [
+            "pass_rate_below_threshold"
+          ],
+          "quality_gate_warnings": [],
+          "llm_degradation_policy": {
+            "llm_mode": "auto",
+            "degraded": false,
+            "gate_blocking": false,
+            "gate_reason": "none",
+            "fallback_quality_ok": false,
+            "pass_rate_ok": false,
+            "happy_path_coverage_complete": true,
+            "required_operation_count": 4,
+            "happy_path_operation_count": 4,
+            "scenario_count": 16
+          },
+          "average_duration_ms": 0.675,
+          "contract_checks_run": 16,
+          "contract_check_failures": 0,
+          "corrected_expectations": 0,
+          "detected_endpoints": 4,
+          "scenario_count_generated": 16,
+          "runtime_cap_hit": false,
+          "runtime_skipped_scenarios": 0,
+          "unsafe_actions_blocked": 0,
+          "max_runtime_sec": null,
+          "environment_profile": "staging",
+          "test_type_breakdown": {
+            "happy_path": {
+              "total": 6,
+              "passed": 0,
+              "failed": 6,
+              "suspect": 0,
+              "blocked": 0
+            },
+            "authentication": {
+              "total": 3,
+              "passed": 0,
+              "failed": 3,
+              "suspect": 0,
+              "blocked": 0
+            },
+            "input_validation": {
+              "total": 1,
+              "passed": 0,
+              "failed": 1,
+              "suspect": 0,
+              "blocked": 0
+            },
+            "error_handling": {
+              "total": 2,
+              "passed": 0,
+              "failed": 2,
+              "suspect": 0,
+              "blocked": 0
+            },
+            "boundary_testing": {
+              "total": 2,
+              "passed": 0,
+              "failed": 2,
+              "suspect": 0,
+              "blocked": 0
+            },
+            "performance": {
+              "total": 1,
+              "passed": 0,
+              "failed": 1,
+              "suspect": 0,
+              "blocked": 0
+            },
+            "security": {
+              "total": 1,
+              "passed": 0,
+              "failed": 1,
+              "suspect": 0,
+              "blocked": 0
+            }
+          },
+          "failed_examples": [
+            {
+              "name": "test_get_orders_orderId_rl_history_seed_happy_path_200",
+              "method": "GET",
+              "endpoint": "/orders/123",
+              "expected_status": 200,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            },
+            {
+              "name": "test_get_products_rl_history_seed_happy_path_200",
+              "method": "GET",
+              "endpoint": "/products",
+              "expected_status": 200,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            },
+            {
+              "name": "test_post_orders_rl_history_seed_happy_path_201",
+              "method": "POST",
+              "endpoint": "/orders",
+              "expected_status": 201,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            },
+            {
+              "name": "test_post_products_rl_history_seed_happy_path_201",
+              "method": "POST",
+              "endpoint": "/products",
+              "expected_status": 201,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            },
+            {
+              "name": "GET /products - Happy Path_rl_missing_auth",
+              "method": "GET",
+              "endpoint": "/products",
+              "expected_status": 401,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            },
+            {
+              "name": "test_post_products_rl_history_seed_input_validation_400",
+              "method": "POST",
+              "endpoint": "/products",
+              "expected_status": 400,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            },
+            {
+              "name": "POST /products - Happy Path_rl_missing_required_name",
+              "method": "POST",
+              "endpoint": "/products",
+              "expected_status": 400,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            },
+            {
+              "name": "POST /orders - Happy Path_rl_learned_below_min_quantity",
+              "method": "POST",
+              "endpoint": "/orders",
+              "expected_status": 400,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            },
+            {
+              "name": "GET /orders/{orderId} - Happy Path",
+              "method": "GET",
+              "endpoint": "/orders/abc123",
+              "expected_status": 200,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            },
+            {
+              "name": "GET /products - Happy Path",
+              "method": "GET",
+              "endpoint": "/products",
+              "expected_status": 200,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            },
+            {
+              "name": "POST /orders - Dependency Failure",
+              "method": "POST",
+              "endpoint": "/orders",
+              "expected_status": 503,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            },
+            {
+              "name": "GET /products - Performance Test",
+              "method": "GET",
+              "endpoint": "/products",
+              "expected_status": 200,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            },
+            {
+              "name": "GET /products - Boundary Test Large Page Size",
+              "method": "GET",
+              "endpoint": "/products",
+              "expected_status": 401,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            },
+            {
+              "name": "GET /products - Boundary Test Large Page Size_rl_missing_auth",
+              "method": "GET",
+              "endpoint": "/products",
+              "expected_status": 401,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            },
+            {
+              "name": "test_get_products_rl_history_seed_authentication_401",
+              "method": "GET",
+              "endpoint": "/products",
+              "expected_status": 401,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            },
+            {
+              "name": "GET /products - Happy Path_rl_query_fuzz",
+              "method": "GET",
+              "endpoint": "/products",
+              "expected_status": 400,
+              "actual_status": 404,
+              "verdict": "fail",
+              "error": ""
+            }
+          ]
+        },
+        "report_path": "/Users/sjoybrata/Desktop/reinforcement-agent/.qa_specialist_workspace/qa_execution_report.json"
+      },
+      "execution_time": 2.384185791015625e-05,
+      "session_id": "706b6b17-fa6f-4888-95d5-6a557c6bb22d",
+      "traces_collected": 18,
+      "training_enabled": true,
+      "rl_training_result": {
+        "status": "trained",
+        "value_loss": 0.40997517108917236,
+        "batch_size": 32,
+        "gradient_steps": 1,
+        "min_batch_size": 8,
+        "training_steps": 3,
+        "buffer_size": 53,
+        "learning_rate": 0.0003,
+        "weights_updated": true,
+        "checkpoint": {
+          "status": "saved",
+          "path": "/Users/sjoybrata/Desktop/reinforcement-agent/.qa_specialist_workspace/agent_lightning_checkpoint.pt",
+          "training_steps": 3,
+          "buffer_size": 53
+        }
+      }
+    },
+    "training_stats": {
+      "registered_agents": 1,
+      "total_traces": 18,
+      "active_sessions": 0,
+      "rl_buffer_size": 53,
+      "rl_training_steps": 3,
+      "training_enabled": true,
+      "checkpoint_path": "/Users/sjoybrata/Desktop/reinforcement-agent/.qa_specialist_workspace/agent_lightning_checkpoint.pt",
+      "checkpoint_autosave": true,
+      "rl_model_ready": true,
+      "state_encoder": "stable_sha256_v2"
+    }
+  },
+  "paper_references": {
+    "agent_lightning": "https://arxiv.org/pdf/2508.03680",
+    "gam": "https://arxiv.org/pdf/2511.18423"
+  },
+  "report_files": {
+    "json": "/Users/sjoybrata/Desktop/reinforcement-agent/.qa_specialist_workspace/qa_execution_report.json",
+    "markdown": "/Users/sjoybrata/Desktop/reinforcement-agent/.qa_specialist_workspace/qa_execution_report.md",
+    "llm_scenario_debug": "/Users/sjoybrata/Desktop/reinforcement-agent/.qa_specialist_workspace/llm_scenario_debug.jsonl"
+  }
+}

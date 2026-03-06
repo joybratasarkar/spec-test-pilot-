@@ -22,10 +22,20 @@ Options:
   --environment-profile <p> mock|staging|prod_safe (default: mock)
   --pass-threshold <float>  Quality gate threshold (default: 0.70)
   --script-kind <kind>      One generated script kind: python_pytest|javascript_jest|curl_script|java_restassured (default: python_pytest)
+  --rl-train-mode <mode>    RL training mode (mandatory): periodic
   --base-url <url>          Base URL for generated tests (default: http://localhost:8000)
   --rl-checkpoint <path>    Agent Lightning checkpoint file path (default: /tmp/agent_lightning_<domain>.pt)
   --customer-mode           Customer UX mode: persistent workspace/checkpoint under ~/.spec_test_pilot
   --verify-persistence      In run mode, automatically re-run once and compare RL counters
+  --ci-gate                 Enable CI quality-gate checks (default: on)
+  --no-ci-gate              Disable CI quality-gate checks
+  --ci-pass-floor <float>   CI pass-rate floor (default: pass-threshold)
+  --ci-flaky-threshold <f>  CI flaky ratio ceiling vs previous run (default: 0.15)
+  --ci-max-pass-drop <f>    Max allowed pass-rate drop vs previous run (default: 0.08)
+  --ci-max-reward-drop <f>  Max allowed run-reward drop vs previous run (default: 0.10)
+  --ci-min-gam-quality <f>  Min GAM context quality score (default: 0.55)
+  --safe-mode-on-fail       Restore prior checkpoint + emit safe-mode marker on CI gate failure (default: on)
+  --no-safe-mode-on-fail    Disable rollback/safe-mode behavior
   --customer-root <path>    Override customer workspace root (default: ~/.spec_test_pilot)
   --list-domains            Print supported domain presets
   -h, --help                Show this help
@@ -59,10 +69,18 @@ WORKSPACE_ID=""
 ENVIRONMENT_PROFILE="mock"
 PASS_THRESHOLD="0.70"
 SCRIPT_KIND="python_pytest"
+RL_TRAIN_MODE="periodic"
 BASE_URL="http://localhost:8000"
 RL_CHECKPOINT=""
 CUSTOMER_MODE="0"
 VERIFY_PERSISTENCE="0"
+CI_GATE="1"
+CI_PASS_FLOOR=""
+CI_FLAKY_THRESHOLD="0.15"
+CI_MAX_PASS_DROP="0.08"
+CI_MAX_REWARD_DROP="0.10"
+CI_MIN_GAM_QUALITY="0.55"
+SAFE_MODE_ON_FAIL="1"
 CUSTOMER_ROOT="${HOME}/.spec_test_pilot"
 CUSTOMER_ROOT_FALLBACK="/tmp/.spec_test_pilot"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -130,6 +148,10 @@ while [[ $# -gt 0 ]]; do
       SCRIPT_KIND="${2:-}"
       shift 2
       ;;
+    --rl-train-mode)
+      RL_TRAIN_MODE="${2:-}"
+      shift 2
+      ;;
     --base-url)
       BASE_URL="${2:-}"
       shift 2
@@ -144,6 +166,42 @@ while [[ $# -gt 0 ]]; do
       ;;
     --verify-persistence)
       VERIFY_PERSISTENCE="1"
+      shift
+      ;;
+    --ci-gate)
+      CI_GATE="1"
+      shift
+      ;;
+    --no-ci-gate)
+      CI_GATE="0"
+      shift
+      ;;
+    --ci-pass-floor)
+      CI_PASS_FLOOR="${2:-}"
+      shift 2
+      ;;
+    --ci-flaky-threshold)
+      CI_FLAKY_THRESHOLD="${2:-}"
+      shift 2
+      ;;
+    --ci-max-pass-drop)
+      CI_MAX_PASS_DROP="${2:-}"
+      shift 2
+      ;;
+    --ci-max-reward-drop)
+      CI_MAX_REWARD_DROP="${2:-}"
+      shift 2
+      ;;
+    --ci-min-gam-quality)
+      CI_MIN_GAM_QUALITY="${2:-}"
+      shift 2
+      ;;
+    --safe-mode-on-fail)
+      SAFE_MODE_ON_FAIL="1"
+      shift
+      ;;
+    --no-safe-mode-on-fail)
+      SAFE_MODE_ON_FAIL="0"
       shift
       ;;
     --customer-root)
@@ -168,6 +226,11 @@ done
 
 if [[ "${ACTION}" != "generate" && "${ACTION}" != "run" && "${ACTION}" != "both" ]]; then
   echo "Invalid --action: ${ACTION}. Use generate|run|both" >&2
+  exit 1
+fi
+
+if [[ "${RL_TRAIN_MODE}" != "periodic" ]]; then
+  echo "Invalid --rl-train-mode: ${RL_TRAIN_MODE}. Only periodic is allowed." >&2
   exit 1
 fi
 
@@ -508,6 +571,10 @@ resolve_python() {
   fi
 }
 
+if [[ -z "${CI_PASS_FLOOR}" ]]; then
+  CI_PASS_FLOOR="${PASS_THRESHOLD}"
+fi
+
 extract_report_metrics() {
   local python_bin="$1"
   local report_path="$2"
@@ -527,6 +594,95 @@ steps = data.get("agent_lightning", {}).get("training_stats", {}).get("rl_traini
 buffer_size = data.get("agent_lightning", {}).get("training_stats", {}).get("rl_buffer_size", 0)
 print(f"{pass_rate}|{steps}|{buffer_size}")
 PY
+}
+
+find_previous_report() {
+  local current_output="$1"
+  if [[ "${CUSTOMER_MODE}" != "1" ]]; then
+    return 0
+  fi
+  local runs_dir="${CUSTOMER_BASE}/runs"
+  if [[ ! -d "${runs_dir}" ]]; then
+    return 0
+  fi
+  local candidate=""
+  while IFS= read -r path; do
+    [[ -z "${path}" ]] && continue
+    if [[ "${path}" == "${current_output}" || "${path}" == "${current_output}_persistence_check" ]]; then
+      continue
+    fi
+    if [[ -f "${path}/qa_execution_report.json" ]]; then
+      candidate="${path}/qa_execution_report.json"
+      break
+    fi
+  done < <(ls -1dt "${runs_dir}"/* 2>/dev/null || true)
+  if [[ -n "${candidate}" ]]; then
+    echo "${candidate}"
+  fi
+}
+
+evaluate_ci_gate() {
+  local report_path="$1"
+  local previous_report="$2"
+  local stage_label="$3"
+  local gate_output=""
+  local gate_cmd=(
+    "${PYTHON_BIN}" "${SCRIPT_DIR}/ci_quality_gate.py"
+    --report "${report_path}"
+    --pass-rate-floor "${CI_PASS_FLOOR}"
+    --flaky-threshold "${CI_FLAKY_THRESHOLD}"
+    --max-pass-rate-drop "${CI_MAX_PASS_DROP}"
+    --max-run-reward-drop "${CI_MAX_REWARD_DROP}"
+    --min-context-quality "${CI_MIN_GAM_QUALITY}"
+    --require-summary-quality-gate
+  )
+  if [[ -n "${previous_report}" && -f "${previous_report}" ]]; then
+    gate_cmd+=(--previous-report "${previous_report}")
+  fi
+  set +e
+  gate_output="$("${gate_cmd[@]}" 2>&1)"
+  local gate_rc=$?
+  set -e
+  echo "[CI] ${stage_label}: ${gate_output}"
+  if [[ ${gate_rc} -ne 0 ]]; then
+    return 2
+  fi
+  return 0
+}
+
+activate_safe_mode() {
+  local reason="$1"
+  local first_report="${2:-}"
+  local second_report="${3:-}"
+  if [[ "${SAFE_MODE_ON_FAIL}" != "1" ]]; then
+    return 0
+  fi
+  if [[ "${CUSTOMER_MODE}" != "1" ]]; then
+    return 0
+  fi
+  if [[ -n "${ROLLBACK_CHECKPOINT_BACKUP}" && -f "${ROLLBACK_CHECKPOINT_BACKUP}" ]]; then
+    cp -f "${ROLLBACK_CHECKPOINT_BACKUP}" "${RL_CHECKPOINT}" || true
+    echo "[SAFE-MODE] Restored checkpoint from backup: ${ROLLBACK_CHECKPOINT_BACKUP}"
+  fi
+  local marker="${CUSTOMER_BASE}/safe_mode_last_failure.json"
+  "${PYTHON_BIN}" - "${marker}" "${reason}" "${first_report}" "${second_report}" <<'PY'
+import json
+import sys
+from datetime import datetime
+from pathlib import Path
+
+marker = Path(sys.argv[1])
+payload = {
+    "timestamp": datetime.utcnow().isoformat() + "Z",
+    "reason": sys.argv[2],
+    "first_report": sys.argv[3],
+    "second_report": sys.argv[4],
+    "status": "safe_mode_active",
+}
+marker.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+print(str(marker))
+PY
+  echo "[SAFE-MODE] Marker written: ${marker}"
 }
 
 if [[ "${ACTION}" == "generate" || "${ACTION}" == "both" ]]; then
@@ -563,13 +719,30 @@ if [[ "${ACTION}" == "run" || "${ACTION}" == "both" ]]; then
   fi
   echo "  env_profile:   ${ENVIRONMENT_PROFILE}"
   echo "  script_kind:   ${SCRIPT_KIND}"
+  echo "  rl_train_mode: ${RL_TRAIN_MODE}"
   echo "  rl_checkpoint: ${RL_CHECKPOINT}"
   echo "  gam_llm_mode:  ${GAM_LLM_MODE} (enforced)"
   echo "  llm_timeout:   ${QA_SCENARIO_LLM_TIMEOUT_SECONDS}s"
   echo "  llm_retries:   ${QA_SCENARIO_LLM_MAX_RETRIES}"
+  echo "  ci_gate:       ${CI_GATE}"
+  if [[ "${CI_GATE}" == "1" ]]; then
+    echo "  ci_pass_floor: ${CI_PASS_FLOOR}"
+    echo "  ci_flaky_max:  ${CI_FLAKY_THRESHOLD}"
+    echo "  ci_pass_drop:  ${CI_MAX_PASS_DROP}"
+    echo "  ci_reward_drop:${CI_MAX_REWARD_DROP}"
+    echo "  ci_gam_min:    ${CI_MIN_GAM_QUALITY}"
+  fi
   if [[ "${CUSTOMER_MODE}" == "1" ]]; then
     echo "  customer_mode: enabled"
     echo "  customer_root: ${CUSTOMER_ROOT}"
+  fi
+
+  PREV_REPORT_BASE="$(find_previous_report "${OUTPUT_DIR}")"
+  ROLLBACK_CHECKPOINT_BACKUP=""
+  if [[ "${SAFE_MODE_ON_FAIL}" == "1" && -n "${RL_CHECKPOINT}" && -f "${RL_CHECKPOINT}" ]]; then
+    ROLLBACK_CHECKPOINT_BACKUP="${RL_CHECKPOINT}.pre_ci_backup_$(date +%Y%m%d_%H%M%S)"
+    cp -f "${RL_CHECKPOINT}" "${ROLLBACK_CHECKPOINT_BACKUP}"
+    echo "  rollback_backup:${ROLLBACK_CHECKPOINT_BACKUP}"
   fi
 
   cmd=(
@@ -583,6 +756,7 @@ if [[ "${ACTION}" == "run" || "${ACTION}" == "both" ]]; then
     --max-scenarios "${MAX_SCENARIOS}"
     --pass-threshold "${PASS_THRESHOLD}"
     --script-kind "${SCRIPT_KIND}"
+    --rl-train-mode "${RL_TRAIN_MODE}"
   )
   if [[ -n "${RL_CHECKPOINT}" ]]; then
     cmd+=(--rl-checkpoint "${RL_CHECKPOINT}")
@@ -601,6 +775,14 @@ if [[ "${ACTION}" == "run" || "${ACTION}" == "both" ]]; then
   echo "[OK] Run completed."
   echo "  JSON report: ${OUTPUT_DIR}/qa_execution_report.json"
   echo "  MD report:   ${OUTPUT_DIR}/qa_execution_report.md"
+
+  if [[ "${CI_GATE}" == "1" ]]; then
+    if ! evaluate_ci_gate "${OUTPUT_DIR}/qa_execution_report.json" "${PREV_REPORT_BASE}" "base_run"; then
+      echo "[CI] Base run quality gate failed."
+      activate_safe_mode "base_run_ci_gate_failed" "${OUTPUT_DIR}/qa_execution_report.json" ""
+      exit 2
+    fi
+  fi
 
   if [[ "${VERIFY_PERSISTENCE}" == "1" ]]; then
     if [[ ! -f "${OUTPUT_DIR}/qa_execution_report.json" ]]; then
@@ -626,6 +808,7 @@ if [[ "${ACTION}" == "run" || "${ACTION}" == "both" ]]; then
       --max-scenarios "${MAX_SCENARIOS}"
       --pass-threshold "${PASS_THRESHOLD}"
       --script-kind "${SCRIPT_KIND}"
+      --rl-train-mode "${RL_TRAIN_MODE}"
     )
     if [[ -n "${RL_CHECKPOINT}" ]]; then
       verify_cmd+=(--rl-checkpoint "${RL_CHECKPOINT}")
@@ -653,5 +836,13 @@ if [[ "${ACTION}" == "run" || "${ACTION}" == "both" ]]; then
     echo "  second_rl_buffer:  ${second_buffer}"
     echo "  first_report:      ${OUTPUT_DIR}/qa_execution_report.json"
     echo "  second_report:     ${verify_output_dir}/qa_execution_report.json"
+
+    if [[ "${CI_GATE}" == "1" ]]; then
+      if ! evaluate_ci_gate "${verify_output_dir}/qa_execution_report.json" "${OUTPUT_DIR}/qa_execution_report.json" "persistence_run"; then
+        echo "[CI] Persistence run quality gate failed."
+        activate_safe_mode "persistence_ci_gate_failed" "${OUTPUT_DIR}/qa_execution_report.json" "${verify_output_dir}/qa_execution_report.json"
+        exit 2
+      fi
+    fi
   fi
 fi

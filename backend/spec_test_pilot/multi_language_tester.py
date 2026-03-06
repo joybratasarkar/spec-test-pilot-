@@ -23,6 +23,7 @@ import requests
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+MISSING_PATH_PARAM_SENTINEL = "__qa_missing_path_param__"
 
 
 class TestLanguage(Enum):
@@ -1938,7 +1939,16 @@ class MultiLanguageTestGenerator:
         for path_name in re.findall(r"\{([^}]+)\}", rendered):
             key = str(path_name)
             value = query_params.pop(key, self._default_path_value(key))
-            rendered = rendered.replace("{" + key + "}", quote(str(value), safe=""))
+            placeholder = "{" + key + "}"
+            if str(value).strip() == MISSING_PATH_PARAM_SENTINEL:
+                rendered = rendered.replace("/" + placeholder, "")
+                rendered = rendered.replace(placeholder + "/", "")
+                rendered = rendered.replace(placeholder, "")
+                continue
+            rendered = rendered.replace(placeholder, quote(str(value), safe=""))
+        rendered = re.sub(r"/{2,}", "/", rendered)
+        if rendered and not rendered.startswith("/"):
+            rendered = "/" + rendered
         return rendered, query_params
     
     def generate_python_tests(self) -> str:

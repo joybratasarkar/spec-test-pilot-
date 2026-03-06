@@ -37,6 +37,11 @@ from pydantic import BaseModel, create_model
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("DynamicMockServer")
 
+SQLI_PATTERN = re.compile(
+    r"('(?:\s*;)?\s*--|\bunion\b\s+\bselect\b|\bdrop\b\s+\btable\b|\bor\b\s+1\s*=\s*1)",
+    re.IGNORECASE,
+)
+
 
 class DynamicResponseGenerator:
     """Generate realistic responses based on OpenAPI schemas."""
@@ -742,6 +747,16 @@ class DynamicMockServer:
                     status_code=404,
                     detail=f"{resource_name.title()} not found: {param_value}"
                 )
+            # For unconstrained order IDs in mock mode, map invalid/suspicious IDs
+            # to deterministic not-found behavior rather than returning 200.
+            if str(param_name).lower() in {"orderid", "order_id"}:
+                has_disallowed_chars = re.fullmatch(r"[A-Za-z0-9_-]+", value) is None
+                is_excessive_length = len(value) > 32
+                if has_disallowed_chars or is_excessive_length:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Order not found: {param_value}",
+                    )
         
         # Simulate conflict for POST with specific values
         if method == "POST":
@@ -815,6 +830,11 @@ class DynamicMockServer:
         if schema_type == "string":
             if not isinstance(value, str):
                 raise HTTPException(status_code=400, detail=f"Field '{field_name}' must be a string")
+            if SQLI_PATTERN.search(value):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Potentially unsafe input detected for field '{field_name}'",
+                )
             min_length = schema.get("minLength")
             max_length = schema.get("maxLength")
             if isinstance(min_length, int) and len(value) < min_length:
@@ -975,7 +995,19 @@ class DynamicMockServer:
             if param_name.endswith("Id") or param_name.endswith("_id"):
                 if isinstance(response_data, dict):
                     id_field = param_name if param_name in response_data else "id"
-                    response_data[id_field] = int(param_value) if param_value.isdigit() else param_value
+                    existing_value = response_data.get(id_field)
+                    # Preserve schema-generated response types when possible.
+                    if isinstance(existing_value, str):
+                        response_data[id_field] = str(param_value)
+                    elif isinstance(existing_value, int) and str(param_value).isdigit():
+                        response_data[id_field] = int(param_value)
+                    elif isinstance(existing_value, float):
+                        try:
+                            response_data[id_field] = float(param_value)
+                        except Exception:
+                            response_data[id_field] = existing_value
+                    else:
+                        response_data[id_field] = param_value
         
         # Handle DELETE (204 No Content)
         if method == "DELETE":

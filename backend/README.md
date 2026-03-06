@@ -23,6 +23,15 @@ backend/.venv/bin/pip install -r backend/requirements.txt
 ./backend/start-backend.sh
 ```
 
+Startup policy:
+
+1. Periodic RL scheduler is enabled by default on every restart.
+2. `QA_RL_PERIODIC_ENABLED` is enforced to `1` by `run_customer_backend_fastapi.sh`.
+3. Interval and batch knobs can be tuned with:
+   - `QA_RL_PERIODIC_INTERVAL_SEC` (default `300`)
+   - `QA_RL_PERIODIC_MAX_STEPS` (default `25`)
+   - `QA_RL_PERIODIC_MIN_BUFFER` (default `32`)
+
 Default endpoint:
 
 ```text
@@ -34,7 +43,7 @@ http://127.0.0.1:8787
 Recommended mode:
 
 ```bash
-./backend/run_qa_domain.sh --domain ecommerce --customer-mode --verify-persistence
+./backend/run_qa_domain.sh --domain ecommerce --customer-mode --verify-persistence --rl-train-mode periodic
 ```
 
 Advanced mode:
@@ -44,8 +53,23 @@ Advanced mode:
   --domain ecommerce \
   --action both \
   --output-dir /tmp/qa_ecommerce_run \
-  --rl-checkpoint /tmp/agent_lightning_ecommerce.pt
+  --rl-checkpoint /tmp/agent_lightning_ecommerce.pt \
+  --rl-train-mode periodic
 ```
+
+Periodic background trainer:
+
+```bash
+python backend/rl_periodic_trainer.py \
+  --checkpoint /tmp/agent_lightning_ecommerce.pt \
+  --train-mode periodic \
+  --max-steps 25 \
+  --min-buffer 32
+```
+
+RL mode:
+
+1. `periodic` (mandatory): collect transitions during runs, train later in scheduled batches.
 
 ## Backend API Endpoints
 
@@ -73,6 +97,11 @@ Base URL: `http://127.0.0.1:8787`
 10. `GAM_MEMO_LLM_MODE`
 11. `GAM_OPENAI_MODEL`
 12. `GAM_MAX_REFLECTIONS`
+13. `RL_TRAIN_MODE` (`periodic`)
+14. `QA_RL_PERIODIC_ENABLED` (`1`, enforced by startup script)
+15. `QA_RL_PERIODIC_INTERVAL_SEC`
+16. `QA_RL_PERIODIC_MAX_STEPS`
+17. `QA_RL_PERIODIC_MIN_BUFFER`
 
 ## Testing
 

@@ -45,6 +45,17 @@ def _mutation_strategies(scenarios: list[ScenarioModel]) -> set[str]:
     return strategies
 
 
+class _FakeResponse:
+    def __init__(self, payload, text: str = "") -> None:
+        self._payload = payload
+        self.text = text
+
+    def json(self):
+        if isinstance(self._payload, Exception):
+            raise self._payload
+        return self._payload
+
+
 def test_non_auth_negative_scenario_gets_default_bearer_token(tmp_path: Path) -> None:
     spec_path = tmp_path / "spec.yaml"
     _write_spec(spec_path)
@@ -134,6 +145,67 @@ def test_auth_negative_401_with_bearer_token_forces_invalid_token(tmp_path: Path
         headers=scenario.headers,
     )
     assert headers.get("Authorization") == "Bearer invalid"
+
+
+def test_boundary_401_expectation_is_treated_as_auth_negative(tmp_path: Path) -> None:
+    spec_path = tmp_path / "spec.yaml"
+    _write_spec(spec_path)
+
+    agent = QASpecialistAgent(
+        spec_path=str(spec_path),
+        output_dir=str(tmp_path / "out"),
+        max_scenarios=4,
+    )
+    spec = agent._load_spec()
+    agent._auth_required_ops = agent._build_auth_requirement_map(spec)
+
+    scenario = ScenarioModel(
+        name="test_get_orders_boundary_probe",
+        description="boundary probe without auth marker text",
+        test_type=ScenarioType.BOUNDARY_TESTING,
+        endpoint="/orders/{orderId}",
+        method="GET",
+        expected_status=401,
+        headers={"Authorization": "Bearer valid_token_123"},
+    )
+
+    headers = agent._normalize_auth_headers_for_execution(
+        scenario=scenario,
+        method="GET",
+        headers=scenario.headers,
+    )
+    assert headers.get("Authorization") == "Bearer invalid"
+
+
+def test_boundary_unconstrained_path_400_normalizes_to_404(tmp_path: Path) -> None:
+    spec_path = tmp_path / "spec.yaml"
+    _write_spec(spec_path)
+
+    agent = QASpecialistAgent(
+        spec_path=str(spec_path),
+        output_dir=str(tmp_path / "out"),
+        max_scenarios=4,
+    )
+
+    scenario = ScenarioModel(
+        name="test_get_orders_boundary_invalid_id",
+        description="boundary testing invalid id format",
+        test_type=ScenarioType.BOUNDARY_TESTING,
+        endpoint="/orders/{orderId}",
+        method="GET",
+        expected_status=400,
+    )
+    op_meta = {
+        "response_statuses": [200, 401, 404],
+        "path_param_schemas": {"orderId": {"type": "string"}},
+    }
+
+    normalized = agent._normalize_expected_status_for_execution(
+        scenario=scenario,
+        method="GET",
+        op_meta=op_meta,
+    )
+    assert normalized == 404
 
 
 def test_selection_expands_to_cover_all_uncertain_scenarios(tmp_path: Path) -> None:
@@ -1106,6 +1178,35 @@ def test_history_seed_stage_adds_learning_driven_candidates(tmp_path: Path) -> N
     assert any("rl_history_seed" in scenario.name for scenario in candidates)
 
 
+def test_history_seed_boundary_auth_status_is_remapped(tmp_path: Path) -> None:
+    spec_path = tmp_path / "spec.yaml"
+    _write_spec(spec_path)
+    agent = QASpecialistAgent(
+        spec_path=str(spec_path),
+        output_dir=str(tmp_path / "out"),
+        max_scenarios=8,
+    )
+
+    scenario = agent._build_history_seed_scenario(
+        {
+            "endpoint": "/orders/{orderId}",
+            "method": "GET",
+            "test_type": "boundary_testing",
+            "expected_status": 401,
+            "op_meta": {
+                "response_statuses": [200, 401, 404],
+                "path_param_names": ["orderId"],
+            },
+            "has_body": False,
+            "has_params": True,
+            "attempts": 2,
+            "failure_rate": 0.5,
+        }
+    )
+
+    assert scenario.expected_status == 404
+
+
 def test_rl_mutation_auth_negative_keeps_auth_focused_variants(tmp_path: Path) -> None:
     spec_path = tmp_path / "spec.yaml"
     _write_spec(spec_path)
@@ -1855,3 +1956,147 @@ def test_learned_numeric_underflow_mutation_keeps_required_fields(tmp_path: Path
     assert underflow_body.get("productId") not in {None, ""}
     assert underflow_body.get("quantity") is not None
     assert float(underflow_body["quantity"]) < 1.0
+
+
+def test_build_curl_repro_command_masks_auth_and_quotes_payload(tmp_path: Path) -> None:
+    spec_path = tmp_path / "spec.yaml"
+    _write_spec(spec_path)
+    agent = QASpecialistAgent(
+        spec_path=str(spec_path),
+        output_dir=str(tmp_path / "out"),
+        max_scenarios=4,
+    )
+
+    cmd = agent._build_curl_repro_command(
+        method="POST",
+        base_url_hint="http://testserver",
+        endpoint_resolved="/products",
+        headers={
+            "Authorization": "Bearer valid_token",
+            "Content-Type": "application/json",
+        },
+        query={"q": "x y", "page": 1},
+        body={"name": "Product'; DROP TABLE products;--", "price": 10},
+    )
+
+    assert "Bearer ***" in cmd
+    assert "valid_token" not in cmd
+    assert "Content-Type: application/json" in cmd
+    assert "q=x+y&page=1" in cmd
+    assert "DROP TABLE products" in cmd
+
+
+def test_verify_response_contract_uses_json_fallback_when_schema_missing(tmp_path: Path) -> None:
+    spec_path = tmp_path / "spec.yaml"
+    _write_spec(spec_path)
+    agent = QASpecialistAgent(
+        spec_path=str(spec_path),
+        output_dir=str(tmp_path / "out"),
+        max_scenarios=4,
+    )
+
+    scenario = ScenarioModel(
+        name="test_get_orders_happy",
+        description="happy path",
+        test_type=ScenarioType.HAPPY_PATH,
+        endpoint="/orders/{orderId}",
+        method="GET",
+        expected_status=200,
+    )
+    response = _FakeResponse({"ok": True})
+
+    contract = agent._verify_response_contract(
+        scenario=scenario,
+        actual_status=200,
+        response=response,
+        query_params={},
+        body=None,
+        operation_meta={},
+    )
+
+    assert contract["checked"] is True
+    assert contract["schema_found"] is False
+    assert contract["valid"] is True
+    assert "json_sanity_check" in " ".join(contract.get("issues", []))
+
+
+def test_forced_weak_replay_respects_cadence(tmp_path: Path) -> None:
+    spec_path = tmp_path / "spec.yaml"
+    _write_spec(spec_path)
+    agent = QASpecialistAgent(
+        spec_path=str(spec_path),
+        output_dir=str(tmp_path / "out"),
+        max_scenarios=8,
+    )
+    loaded = agent._load_spec()
+    agent._operation_index = agent._build_operation_index(loaded)
+    agent._spec_paths = set((loaded.get("paths") or {}).keys())
+    fingerprint = "GET|/orders/{orderId}|authentication|401|body=0|params=1"
+    agent.learning_state["run_count"] = 10
+    agent.adaptive_policy.scenario_stats = {
+        fingerprint: {
+            "attempts": 6,
+            "failure_rate": 1.0,
+            "avg_reward": -0.2,
+            "method": "GET",
+            "endpoint": "/orders/{orderId}",
+            "test_type": "authentication",
+            "expected_status": 401,
+        }
+    }
+    agent.learning_state["replay_schedule"] = {fingerprint: 9}
+    assert agent._build_forced_weak_replay_targets(limit=2) == []
+
+    agent.learning_state["replay_schedule"] = {fingerprint: 7}
+    targets = agent._build_forced_weak_replay_targets(limit=2)
+    assert targets
+    assert targets[0]["fingerprint"] == fingerprint
+
+
+def test_extract_focus_points_avoids_recent_repetition(tmp_path: Path) -> None:
+    spec_path = tmp_path / "spec.yaml"
+    _write_spec(spec_path)
+    agent = QASpecialistAgent(
+        spec_path=str(spec_path),
+        output_dir=str(tmp_path / "out"),
+        max_scenarios=8,
+    )
+    repeated = "Weak RL pattern: GET /orders/{orderId} expected 404, failure_rate=1.0."
+    agent.learning_state["gam_recent_focus_points"] = [repeated.lower()]
+    points = agent._extract_focus_points_from_excerpts(
+        [
+            {"source": "memo", "title": "a", "excerpt": repeated},
+            {"source": "memo", "title": "b", "excerpt": "Trend delta: run_reward improved by +0.10"},
+        ],
+        limit=2,
+    )
+    assert all("weak rl pattern: get /orders/{orderid}" not in p.lower() for p in points)
+
+
+def test_selection_summary_contains_portfolio_policy(tmp_path: Path) -> None:
+    spec_path = tmp_path / "spec.yaml"
+    _write_spec(spec_path)
+    agent = QASpecialistAgent(
+        spec_path=str(spec_path),
+        output_dir=str(tmp_path / "out"),
+        max_scenarios=10,
+    )
+    scenarios = [
+        ScenarioModel(
+            name=f"s{i}",
+            description="case",
+            test_type=ScenarioType.AUTHENTICATION if i < 3 else ScenarioType.HAPPY_PATH,
+            endpoint=f"/orders/{{orderId}}",
+            method="GET",
+            expected_status=401 if i < 3 else 200,
+            params={"orderId": str(i)},
+        )
+        for i in range(10)
+    ]
+    selected = agent._select_scenarios_with_learning(scenarios)
+    assert selected
+    policy = agent._last_selection_summary.get("portfolio_policy", {})
+    assert isinstance(policy, dict)
+    assert policy.get("stable_ratio") == 0.7
+    assert policy.get("focus_ratio") == 0.2
+    assert policy.get("explore_ratio") == 0.1

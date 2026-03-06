@@ -40,6 +40,10 @@ JOB_ROOT = Path("/tmp/qa_ui_runs")
 CHECKPOINT_ROOT = Path("/tmp/qa_ui_checkpoints")
 JOB_ROOT.mkdir(parents=True, exist_ok=True)
 CHECKPOINT_ROOT.mkdir(parents=True, exist_ok=True)
+RL_PERIODIC_ENABLED = str(os.getenv("QA_RL_PERIODIC_ENABLED", "1")).strip().lower() not in {"0", "false", "off"}
+RL_PERIODIC_INTERVAL_SEC = max(30, int(os.getenv("QA_RL_PERIODIC_INTERVAL_SEC", "300") or 300))
+RL_PERIODIC_MAX_STEPS = max(1, int(os.getenv("QA_RL_PERIODIC_MAX_STEPS", "25") or 25))
+RL_PERIODIC_MIN_BUFFER = max(1, int(os.getenv("QA_RL_PERIODIC_MIN_BUFFER", "32") or 32))
 
 
 def _bootstrap_runtime_env() -> None:
@@ -98,6 +102,26 @@ app.add_middleware(
 
 _jobs_lock = threading.Lock()
 _jobs: Dict[str, Dict[str, Any]] = {}
+_periodic_lock = threading.Lock()
+_periodic_tick_lock = threading.Lock()
+_periodic_stop_event = threading.Event()
+_periodic_thread: Optional[threading.Thread] = None
+_periodic_state: Dict[str, Any] = {
+    "enabled": RL_PERIODIC_ENABLED,
+    "interval_sec": RL_PERIODIC_INTERVAL_SEC,
+    "max_steps": RL_PERIODIC_MAX_STEPS,
+    "min_buffer": RL_PERIODIC_MIN_BUFFER,
+    "running": False,
+    "runs_total": 0,
+    "runs_with_training": 0,
+    "last_started_at": None,
+    "last_completed_at": None,
+    "last_trigger": None,
+    "last_status": "idle",
+    "last_error": "",
+    "last_summary": {},
+    "last_results": [],
+}
 
 DOMAIN_TOKEN_PATTERN = re.compile(r"^[a-z0-9_-]{1,64}$")
 
@@ -131,6 +155,7 @@ class RunRequest(BaseModel):
     max_runtime_sec: Optional[int] = Field(default=None, alias="maxRuntimeSec")
     llm_token_cap: Optional[int] = Field(default=None, alias="llmTokenCap")
     environment_profile: str = Field(default="mock", alias="environmentProfile")
+    rl_train_mode: str = Field(default="periodic", alias="rlTrainMode")
     pass_threshold: float = Field(default=0.70, alias="passThreshold")
     base_url: str = Field(default="http://localhost:8000", alias="baseUrl")
     customer_mode: bool = Field(default=True, alias="customerMode")
@@ -215,6 +240,12 @@ class RunRequest(BaseModel):
             raise ValueError(f"Unsupported script kind: {value}. Allowed: {allowed}")
         return normalized
 
+    @field_validator("rl_train_mode")
+    @classmethod
+    def validate_rl_train_mode(cls, value: str) -> str:
+        normalized = str(value or "periodic").strip().lower()
+        return "periodic" if normalized != "periodic" else normalized
+
     @field_validator("pass_threshold")
     @classmethod
     def validate_pass_threshold(cls, value: float) -> float:
@@ -262,6 +293,7 @@ def _load_report_artifacts(report_json_path: Path) -> Tuple[Dict[str, Any], Dict
         "runtime_skipped_scenarios": summary.get("runtime_skipped_scenarios"),
         "environment_profile": summary.get("environment_profile"),
         "script_kind": payload.get("metadata", {}).get("script_kind"),
+        "rl_train_mode": payload.get("metadata", {}).get("rl_train_mode") or training_stats.get("train_mode"),
         "workspace_id": payload.get("metadata", {}).get("workspace_id"),
         "spec_key": payload.get("metadata", {}).get("spec_key"),
         "run_id": payload.get("metadata", {}).get("run_id"),
@@ -372,6 +404,172 @@ def _job_payload(job: Dict[str, Any], tail: int) -> Dict[str, Any]:
     }
 
 
+def _discover_periodic_checkpoints() -> List[Path]:
+    candidates: set[Path] = set()
+    for path in CHECKPOINT_ROOT.glob("*.pt"):
+        if path.is_file():
+            candidates.add(path.resolve())
+
+    with _jobs_lock:
+        for job in _jobs.values():
+            if not isinstance(job, dict):
+                continue
+            for result in (job.get("results") or {}).values():
+                if not isinstance(result, dict):
+                    continue
+                raw = str(result.get("checkpoint", "")).strip()
+                if not raw:
+                    continue
+                path = Path(raw).expanduser().resolve()
+                if path.is_file():
+                    candidates.add(path)
+    return sorted(candidates, key=lambda p: str(p))
+
+
+def _run_periodic_training_checkpoint(checkpoint_path: Path) -> Dict[str, Any]:
+    from spec_test_pilot.agent_lightning_v2 import AgentLightningTrainer
+
+    trainer = AgentLightningTrainer(
+        checkpoint_path=str(checkpoint_path),
+        checkpoint_autosave=True,
+        gam_writeback=False,
+        train_mode="periodic",
+    )
+    result = trainer.run_periodic_training(
+        max_steps=RL_PERIODIC_MAX_STEPS,
+        min_buffer_size=RL_PERIODIC_MIN_BUFFER,
+    )
+    stats = trainer.get_training_stats()
+    return {
+        "checkpoint": str(checkpoint_path),
+        "result": result,
+        "stats": stats,
+    }
+
+
+def _run_periodic_rl_tick(trigger: str) -> Dict[str, Any]:
+    if not RL_PERIODIC_ENABLED:
+        return {
+            "status": "disabled",
+            "trigger": trigger,
+            "checkpoints": 0,
+            "trained": 0,
+            "skipped": 0,
+            "failed": 0,
+            "results": [],
+        }
+
+    if not _periodic_tick_lock.acquire(blocking=False):
+        return {
+            "status": "busy",
+            "trigger": trigger,
+            "checkpoints": 0,
+            "trained": 0,
+            "skipped": 0,
+            "failed": 0,
+            "results": [],
+        }
+
+    started_at = datetime.utcnow().isoformat() + "Z"
+    with _periodic_lock:
+        _periodic_state["running"] = True
+        _periodic_state["last_started_at"] = started_at
+        _periodic_state["last_trigger"] = str(trigger)
+        _periodic_state["last_status"] = "running"
+        _periodic_state["last_error"] = ""
+
+    results: List[Dict[str, Any]] = []
+    status = "completed"
+    error_message = ""
+    try:
+        checkpoints = _discover_periodic_checkpoints()
+        for checkpoint in checkpoints:
+            try:
+                payload = _run_periodic_training_checkpoint(checkpoint)
+            except Exception as exc:  # pragma: no cover - runtime dependency specific
+                payload = {
+                    "checkpoint": str(checkpoint),
+                    "result": {"status": "error", "reason": str(exc)},
+                    "stats": {},
+                }
+            results.append(payload)
+    except Exception as exc:  # pragma: no cover - defensive
+        status = "error"
+        error_message = str(exc)
+    finally:
+        _periodic_tick_lock.release()
+
+    trained = 0
+    skipped = 0
+    failed = 0
+    for item in results:
+        result = item.get("result") if isinstance(item, dict) else {}
+        result = result if isinstance(result, dict) else {}
+        item_status = str(result.get("status", ""))
+        if item_status == "completed" and int(result.get("trained_steps", 0) or 0) > 0:
+            trained += 1
+        elif item_status in {"completed", "skipped"}:
+            skipped += 1
+        else:
+            failed += 1
+            if status != "error":
+                status = "partial_error"
+
+    completed_at = datetime.utcnow().isoformat() + "Z"
+    summary = {
+        "status": status,
+        "trigger": str(trigger),
+        "checkpoints": len(results),
+        "trained": trained,
+        "skipped": skipped,
+        "failed": failed,
+        "results": results,
+    }
+    with _periodic_lock:
+        _periodic_state["running"] = False
+        _periodic_state["runs_total"] = int(_periodic_state.get("runs_total", 0)) + 1
+        _periodic_state["runs_with_training"] = int(_periodic_state.get("runs_with_training", 0)) + (
+            1 if trained > 0 else 0
+        )
+        _periodic_state["last_completed_at"] = completed_at
+        _periodic_state["last_status"] = status
+        _periodic_state["last_error"] = error_message
+        _periodic_state["last_summary"] = {
+            "checkpoints": len(results),
+            "trained": trained,
+            "skipped": skipped,
+            "failed": failed,
+        }
+        _periodic_state["last_results"] = results[-10:]
+    return summary
+
+
+def _periodic_rl_worker() -> None:
+    while not _periodic_stop_event.wait(RL_PERIODIC_INTERVAL_SEC):
+        _run_periodic_rl_tick(trigger="timer")
+
+
+def _start_periodic_rl_worker() -> None:
+    global _periodic_thread
+    if not RL_PERIODIC_ENABLED:
+        return
+    if _periodic_thread and _periodic_thread.is_alive():
+        return
+    _periodic_stop_event.clear()
+    thread = threading.Thread(target=_periodic_rl_worker, name="qa-periodic-rl", daemon=True)
+    thread.start()
+    _periodic_thread = thread
+
+
+def _stop_periodic_rl_worker() -> None:
+    global _periodic_thread
+    _periodic_stop_event.set()
+    thread = _periodic_thread
+    _periodic_thread = None
+    if thread and thread.is_alive():
+        thread.join(timeout=2.0)
+
+
 def _run_job(job_id: str) -> None:
     with _jobs_lock:
         job = _jobs.get(job_id)
@@ -409,6 +607,8 @@ def _run_job(job_id: str) -> None:
             req["script_kind"],
             "--environment-profile",
             str(req.get("environment_profile", "mock")),
+            "--rl-train-mode",
+            str(req.get("rl_train_mode", "periodic")),
             "--rl-checkpoint",
             str(checkpoint),
         ]
@@ -511,6 +711,14 @@ def _run_job(job_id: str) -> None:
         job["current_domain"] = None
         job["completed_at"] = datetime.utcnow().isoformat() + "Z"
         job["status"] = "completed" if failures == 0 else "failed"
+
+    if RL_PERIODIC_ENABLED:
+        threading.Thread(
+            target=_run_periodic_rl_tick,
+            args=("job_completion",),
+            name=f"qa-periodic-rl-trigger-{job_id}",
+            daemon=True,
+        ).start()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -786,6 +994,7 @@ def index() -> str:
         spec_paths: parseSpecPaths(),
         tenant_id: document.getElementById('tenant').value.trim() || 'customer_default',
         script_kind: document.getElementById('scriptKind').value || 'python_pytest',
+        rl_train_mode: 'periodic',
         prompt: document.getElementById('prompt').value.trim() || null,
         max_scenarios: Number(document.getElementById('max').value || 16),
         pass_threshold: Number(document.getElementById('threshold').value || 0.7),
@@ -911,6 +1120,8 @@ def index() -> str:
 @app.post("/api/jobs")
 def create_job(req: RunRequest) -> Dict[str, Any]:
     req_payload = req.model_dump()
+    # Persist normalized RL mode explicitly for job-level observability.
+    req_payload["rl_train_mode"] = str(getattr(req, "rl_train_mode", "periodic") or "periodic").strip().lower()
     if not str(req_payload.get("workspace_id") or "").strip():
         req_payload["workspace_id"] = str(req_payload.get("tenant_id") or "customer_default")
     spec_paths = req_payload.get("spec_paths") or {}
@@ -1077,6 +1288,19 @@ def api_ping() -> Dict[str, str]:
     }
 
 
+@app.get("/api/system/periodic-rl")
+def get_periodic_rl_status() -> Dict[str, Any]:
+    with _periodic_lock:
+        snapshot = dict(_periodic_state)
+        snapshot["thread_alive"] = bool(_periodic_thread and _periodic_thread.is_alive())
+    return snapshot
+
+
+@app.post("/api/system/periodic-rl/run-now")
+def run_periodic_rl_now() -> Dict[str, Any]:
+    return _run_periodic_rl_tick(trigger="manual_api")
+
+
 @app.post("/api/runs")
 def create_run(req: RunRequest) -> Dict[str, Any]:
     response = create_job(req)
@@ -1214,6 +1438,16 @@ def get_run_learning_delta(
         }
 
     return base_payload
+
+
+@app.on_event("startup")
+def _startup_periodic_services() -> None:
+    _start_periodic_rl_worker()
+
+
+@app.on_event("shutdown")
+def _shutdown_periodic_services() -> None:
+    _stop_periodic_rl_worker()
 
 
 if __name__ == "__main__":

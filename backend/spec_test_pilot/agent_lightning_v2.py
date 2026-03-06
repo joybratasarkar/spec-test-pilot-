@@ -584,6 +584,7 @@ class AgentLightningTrainer:
         checkpoint_path: Optional[str] = None,
         checkpoint_autosave: bool = True,
         gam_writeback: bool = False,
+        train_mode: str = "periodic",
     ):
         # Initialize components
         self.collector = collector or ObservabilityCollector()
@@ -595,6 +596,10 @@ class AgentLightningTrainer:
         # Keep RL observability and training separate from GAM retrieval memory by default.
         # GAM writeback can be enabled explicitly for experiments.
         self.gam_writeback = bool(gam_writeback)
+        normalized_mode = str(train_mode or "periodic").strip().lower()
+        if normalized_mode != "periodic":
+            normalized_mode = "periodic"
+        self.train_mode = normalized_mode
         
         # Registered agents
         self.agents: Dict[str, Callable] = {}
@@ -704,7 +709,12 @@ class AgentLightningTrainer:
             # Process traces for RL training
             if self.training_enabled:
                 rl_training_result = await self._process_training_data(
-                    session_id, agent_id, task_data, result, execution_time
+                    session_id,
+                    agent_id,
+                    task_data,
+                    result,
+                    execution_time,
+                    train_now=False,
                 )
             
             # Update GAM memory
@@ -730,6 +740,7 @@ class AgentLightningTrainer:
                 "session_id": session_id,
                 "traces_collected": len(self.collector.active_sessions.get(session_id, [])),
                 "training_enabled": self.training_enabled,
+                "train_mode": self.train_mode,
                 "rl_training_result": rl_training_result,
             }
             
@@ -748,6 +759,7 @@ class AgentLightningTrainer:
                 "session_id": session_id,
                 "traces_collected": len(self.collector.active_sessions.get(session_id, [])),
                 "training_enabled": self.training_enabled,
+                "train_mode": self.train_mode,
                 "rl_training_result": rl_training_result,
             }
         
@@ -794,7 +806,9 @@ class AgentLightningTrainer:
         agent_id: str, 
         task_data: Dict[str, Any],
         result: Any, 
-        execution_time: float
+        execution_time: float,
+        *,
+        train_now: bool = True,
     ) -> None:
         """Process collected traces into RL training data."""
         traces = self.collector.active_sessions.get(session_id, [])
@@ -809,6 +823,7 @@ class AgentLightningTrainer:
         # Assign credit across traces
         rewards = self.credit_assignment.assign_credit(traces, final_reward, success)
         
+        transitions_added = 0
         # Create RL transitions
         for i in range(len(traces) - 1):
             current_trace = traces[i]
@@ -835,15 +850,23 @@ class AgentLightningTrainer:
                 
                 # Add to RL algorithm
                 self.rl_algorithm.add_transition(transition)
-        
-        # Train RL model (Agent Lightning: train more frequently with smaller batches)
-        training_result = self.rl_algorithm.train_step()  # Always try to train
-        
-        if training_result.get("status") == "trained":
-            self.logger.info(f"🧠 RL training executed: Loss={training_result['value_loss']:.4f}")
-            print(f"🧠 RL TRAINING ACTIVE: Step {training_result['training_steps']}, Loss={training_result['value_loss']:.4f}")
-        elif training_result.get("status") == "skipped":
-            self.logger.debug(f"RL training skipped: {training_result.get('reason', 'unknown')}")
+                transitions_added += 1
+
+        if train_now:
+            # Train RL model (Agent Lightning: train more frequently with smaller batches)
+            training_result = self.rl_algorithm.train_step()
+            if training_result.get("status") == "trained":
+                self.logger.info(f"🧠 RL training executed: Loss={training_result['value_loss']:.4f}")
+                print(f"🧠 RL TRAINING ACTIVE: Step {training_result['training_steps']}, Loss={training_result['value_loss']:.4f}")
+            elif training_result.get("status") == "skipped":
+                self.logger.debug(f"RL training skipped: {training_result.get('reason', 'unknown')}")
+        else:
+            training_result = {
+                "status": "buffered_only",
+                "reason": f"train_mode={self.train_mode}",
+                "training_steps": int(self.rl_algorithm.training_steps),
+                "buffer_size": len(self.rl_algorithm.replay_buffer),
+            }
 
         if self.checkpoint_autosave and self.checkpoint_path:
             try:
@@ -853,8 +876,72 @@ class AgentLightningTrainer:
                 self.logger.warning("Failed to save Agent Lightning checkpoint: %s", e)
                 training_result["checkpoint_error"] = str(e)
         
-        # Store training result in the overall result
+        training_result["transitions_added"] = int(transitions_added)
+        training_result["train_mode"] = self.train_mode
         return training_result
+
+    def run_periodic_training(
+        self,
+        *,
+        max_steps: int = 25,
+        min_buffer_size: int = 32,
+    ) -> Dict[str, Any]:
+        """Run background RL training over accumulated replay buffer."""
+        buffer_size = int(len(self.rl_algorithm.replay_buffer))
+        if not self.training_enabled:
+            return {
+                "status": "skipped",
+                "reason": "training_disabled",
+                "buffer_size": buffer_size,
+                "training_steps": int(self.rl_algorithm.training_steps),
+                "train_mode": self.train_mode,
+            }
+        if self.train_mode != "periodic":
+            return {
+                "status": "skipped",
+                "reason": f"unsupported_train_mode:{self.train_mode}",
+                "buffer_size": buffer_size,
+                "training_steps": int(self.rl_algorithm.training_steps),
+                "train_mode": self.train_mode,
+            }
+        if buffer_size < int(min_buffer_size):
+            return {
+                "status": "skipped",
+                "reason": f"buffer_too_small:{buffer_size}<{int(min_buffer_size)}",
+                "buffer_size": buffer_size,
+                "training_steps": int(self.rl_algorithm.training_steps),
+                "train_mode": self.train_mode,
+            }
+
+        executed_steps = 0
+        trained_steps = 0
+        last_result: Dict[str, Any] = {}
+        for _ in range(max(1, int(max_steps))):
+            executed_steps += 1
+            step_result = self.rl_algorithm.train_step()
+            last_result = dict(step_result or {})
+            if step_result.get("status") == "trained":
+                trained_steps += 1
+            else:
+                break
+
+        out = {
+            "status": "completed",
+            "requested_steps": int(max_steps),
+            "executed_steps": int(executed_steps),
+            "trained_steps": int(trained_steps),
+            "last_result": last_result,
+            "buffer_size": int(len(self.rl_algorithm.replay_buffer)),
+            "training_steps": int(self.rl_algorithm.training_steps),
+            "train_mode": self.train_mode,
+        }
+
+        if self.checkpoint_autosave and self.checkpoint_path:
+            try:
+                out["checkpoint"] = self.save_checkpoint(self.checkpoint_path)
+            except Exception as e:
+                out["checkpoint_error"] = str(e)
+        return out
     
     def _evaluate_success(self, result: Any) -> bool:
         """Evaluate if agent execution was successful."""
@@ -918,6 +1005,7 @@ class AgentLightningTrainer:
             "rl_buffer_size": rl_buffer_size,
             "rl_training_steps": rl_training_steps,
             "training_enabled": self.training_enabled,
+            "train_mode": self.train_mode,
             "checkpoint_path": self.checkpoint_path,
             "checkpoint_autosave": self.checkpoint_autosave,
             "rl_model_ready": bool(rl_training_steps >= 3 and rl_buffer_size >= 32),
@@ -967,6 +1055,7 @@ def create_agent_lightning_system(
     checkpoint_path: Optional[str] = None,
     checkpoint_autosave: bool = True,
     gam_writeback: bool = False,
+    train_mode: str = "periodic",
 ):
     """Create Agent Lightning system integrated with existing components."""
     
@@ -976,6 +1065,7 @@ def create_agent_lightning_system(
         checkpoint_path=checkpoint_path,
         checkpoint_autosave=checkpoint_autosave,
         gam_writeback=gam_writeback,
+        train_mode=train_mode,
     )
     
     # Create adapter for existing SpecTestPilot
@@ -994,6 +1084,7 @@ async def train_with_agent_lightning(
     checkpoint_path: Optional[str] = None,
     checkpoint_autosave: bool = True,
     gam_writeback: bool = False,
+    train_mode: str = "periodic",
 ) -> Dict[str, Any]:
     """
     Train SpecTestPilot using Agent Lightning with zero code changes.
@@ -1008,6 +1099,7 @@ async def train_with_agent_lightning(
         checkpoint_path=checkpoint_path,
         checkpoint_autosave=checkpoint_autosave,
         gam_writeback=gam_writeback,
+        train_mode=train_mode,
     )
     
     # Train agent

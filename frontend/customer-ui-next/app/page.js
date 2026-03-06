@@ -1,12 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
+import Stack from '@mui/material/Stack';
+import Tab from '@mui/material/Tab';
+import Tabs from '@mui/material/Tabs';
+import Typography from '@mui/material/Typography';
 
 const STEP_MARKERS = [
   { name: 'Spec Prepared', marker: '[OK] OpenAPI spec written' },
   { name: 'Run Started', marker: '[RUN] QA specialist agent' },
-  { name: 'RL Session Started', marker: 'Started observability session' },
-  { name: 'RL Training Executed', marker: 'RL training executed' },
+  { name: 'Adaptive Session Started', marker: 'Started observability session' },
+  { name: 'Signals Buffered', marker: 'buffered_only' },
   { name: 'QA Run Complete', marker: 'QA specialist run complete' },
   { name: 'Reports Written', marker: 'JSON report:' }
 ];
@@ -40,11 +48,11 @@ const FLOW_STEPS = [
     output: 'scenario_results[] with actual status/time'
   },
   {
-    id: 'rl_training',
-    name: '5) RL Training',
-    marker: 'RL training executed',
-    input: 'decision signals + rewards/penalties',
-    output: 'updated policy and checkpoint'
+    id: 'learning_buffer',
+    name: '5) Signal Buffering',
+    marker: 'buffered_only',
+    input: 'decision signals + rewards',
+    output: 'signals buffered; scheduled trainer updates model later'
   },
   {
     id: 'reports_emitted',
@@ -169,6 +177,140 @@ function formatDomainLabel(domain) {
     .replace(/\b\w/g, (ch) => ch.toUpperCase());
 }
 
+function toTitleWords(value) {
+  const clean = String(value || '')
+    .trim()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ');
+  if (!clean) {
+    return '';
+  }
+  return clean
+    .split(' ')
+    .map((token) => {
+      if (/^\d+$/.test(token)) {
+        return token;
+      }
+      if (token === token.toUpperCase() && token.length > 1) {
+        return token;
+      }
+      return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
+function normalizeFieldToken(token) {
+  const clean = String(token || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  if (!clean) {
+    return '';
+  }
+  if (clean.endsWith('id') && clean.length > 2) {
+    return `${clean.slice(0, -2)} id`;
+  }
+  return clean.replace(/_/g, ' ');
+}
+
+function extractRlTagsFromScenarioName(name) {
+  const raw = String(name || '').trim();
+  if (!raw.includes('_rl_')) {
+    return [];
+  }
+  const pieces = raw.split('_rl_').slice(1);
+  return pieces
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+}
+
+function humanizeMutationTag(tag) {
+  const normalized = String(tag || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  if (!normalized) {
+    return '';
+  }
+  if (normalized === 'missing_auth') {
+    return 'missing auth token';
+  }
+  if (normalized === 'invalid_auth') {
+    return 'invalid auth token';
+  }
+  if (normalized === 'query_fuzz') {
+    return 'unexpected query parameter payload';
+  }
+  if (normalized === 'path_not_found') {
+    return 'path not found';
+  }
+  if (normalized === 'adaptive_status_hypothesis') {
+    return 'nonexistent resource id check';
+  }
+  if (normalized.startsWith('missing_required_')) {
+    return `missing required field: ${normalizeFieldToken(normalized.slice('missing_required_'.length))}`;
+  }
+  if (normalized.startsWith('learned_missing_required_')) {
+    return `missing required field: ${normalizeFieldToken(normalized.slice('learned_missing_required_'.length))}`;
+  }
+  if (normalized.startsWith('learned_missing_')) {
+    return `missing field: ${normalizeFieldToken(normalized.slice('learned_missing_'.length))}`;
+  }
+  if (normalized.startsWith('missing_')) {
+    return `missing field: ${normalizeFieldToken(normalized.slice('missing_'.length))}`;
+  }
+  if (normalized.startsWith('learned_below_min_')) {
+    return `${normalizeFieldToken(normalized.slice('learned_below_min_'.length))} below minimum`;
+  }
+  if (normalized.startsWith('below_min_')) {
+    return `${normalizeFieldToken(normalized.slice('below_min_'.length))} below minimum`;
+  }
+  if (normalized.startsWith('history_seed_')) {
+    return `${toTitleWords(normalized.slice('history_seed_'.length))} (history seeded)`;
+  }
+  return toTitleWords(normalized);
+}
+
+function humanizeScenarioName(row) {
+  const displayFromBackend = String(row?.display_name || row?.displayName || '').trim();
+  const rawNameFromBackend = String(row?.name_raw || row?.nameRaw || row?.name || '').trim();
+  if (displayFromBackend) {
+    return {
+      label: displayFromBackend,
+      rawName: rawNameFromBackend
+    };
+  }
+  const method = String(row?.method || '').trim().toUpperCase();
+  const endpoint = String(row?.endpoint_template || row?.endpoint || row?.endpoint_resolved || '').trim();
+  const rawName = rawNameFromBackend;
+  const cleanedName = rawName.replace(/^test_/i, '').trim();
+  const baseName = cleanedName.split('_rl_')[0] || cleanedName;
+  const tags = extractRlTagsFromScenarioName(cleanedName);
+  const mutationFromBackend = String(row?.mutation_strategy || row?.mutationStrategy || '').trim();
+  if (mutationFromBackend && mutationFromBackend.toLowerCase() !== 'unknown' && !tags.length) {
+    tags.push(mutationFromBackend);
+  }
+  const historySeeded = tags.some((item) => item.startsWith('history_seed_'));
+  const mutationTag = [...tags].reverse().find((item) => !item.startsWith('history_seed_')) || '';
+  const mutationLabel = humanizeMutationTag(mutationTag);
+  const fallbackIntent = toTitleWords(String(row?.test_type || '').replace(/_/g, ' ')) || toTitleWords(baseName);
+  let intent = mutationLabel || fallbackIntent || 'Scenario';
+  if (historySeeded && !intent.toLowerCase().includes('history seeded')) {
+    intent = `${intent} (history seeded)`;
+  }
+  intent = intent.charAt(0).toUpperCase() + intent.slice(1);
+  const endpointLabel = [method, endpoint].filter(Boolean).join(' ').trim();
+  const label = endpointLabel ? `${endpointLabel} - ${intent}` : intent;
+  return {
+    label,
+    rawName
+  };
+}
+
 function getField(obj, keys, fallback = null) {
   if (!obj) {
     return fallback;
@@ -186,7 +328,10 @@ function toPct(value) {
   if (!Number.isFinite(n)) {
     return 'n/a';
   }
-  return `${(n * 100).toFixed(1)}%`;
+  return new Intl.NumberFormat(undefined, {
+    style: 'percent',
+    maximumFractionDigits: 1
+  }).format(n);
 }
 
 function toNumberOrNull(value) {
@@ -214,7 +359,25 @@ function formatDelta(value, digits = 4) {
     return 'n/a';
   }
   const sign = n > 0 ? '+' : '';
-  return `${sign}${n.toFixed(digits)}`;
+  return `${sign}${new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits
+  }).format(n)}`;
+}
+
+function formatDateTime(value) {
+  const raw = String(value || '').trim();
+  if (!raw || raw.toLowerCase() === 'n/a') {
+    return 'n/a';
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return raw;
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }).format(parsed);
 }
 
 function normalizeGeneratedTestItems(input) {
@@ -259,6 +422,26 @@ function toJsonString(payload) {
   } catch {
     return String(payload);
   }
+}
+
+function isScriptLoadError(text) {
+  const value = String(text || '').toLowerCase();
+  return value.startsWith('[error]') || value.startsWith('[unavailable]');
+}
+
+function pickFirstUsableScriptKind(items, contents) {
+  const list = Array.isArray(items) ? items : [];
+  for (const item of list) {
+    const kind = String(item?.kind || '').trim();
+    if (!kind) {
+      continue;
+    }
+    const content = String(contents?.[kind] || '');
+    if (content.trim() && !isScriptLoadError(content)) {
+      return kind;
+    }
+  }
+  return '';
 }
 
 function parsePythonScriptInsights(text) {
@@ -388,6 +571,122 @@ function parseGeneratedScriptInsights(kind, text) {
   };
 }
 
+function BarListChart({ title, rows = [], valueFormatter = (v) => String(v), emptyText = 'No data.' }) {
+  if (!rows.length) {
+    return (
+      <div className="chart-card">
+        <h3>{title}</h3>
+        <div className="small">{emptyText}</div>
+      </div>
+    );
+  }
+  const max = Math.max(...rows.map((row) => Number(row?.value || 0)), 0.0001);
+  return (
+    <div className="chart-card">
+      <h3>{title}</h3>
+      <div className="chart-rows">
+        {rows.map((row) => {
+          const value = Number(row?.value || 0);
+          const pct = Math.max(0, Math.min(100, (value / max) * 100));
+          return (
+            <div className="chart-row" key={String(row?.label)}>
+              <div className="chart-label">{String(row?.label)}</div>
+              <div className="chart-bar">
+                <div className="chart-fill" style={{ width: `${pct}%` }} />
+              </div>
+              <div className="chart-value">{valueFormatter(value)}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TrendSpark({ title, points = [], valueFormatter = (v) => String(v), emptyText = 'No trend data yet.' }) {
+  if (!points.length) {
+    return (
+      <div className="chart-card">
+        <h3>{title}</h3>
+        <div className="small">{emptyText}</div>
+      </div>
+    );
+  }
+  const min = Math.min(...points.map((row) => Number(row?.value || 0)));
+  const max = Math.max(...points.map((row) => Number(row?.value || 0)));
+  const range = max - min || 1;
+  return (
+    <div className="chart-card">
+      <h3>{title}</h3>
+      <div className="spark-wrap">
+        {points.map((row, idx) => {
+          const value = Number(row?.value || 0);
+          const h = 16 + ((value - min) / range) * 84;
+          return (
+            <div className="spark-col" key={`${String(row?.label)}-${idx}`} title={`${row?.label}: ${valueFormatter(value)}`}>
+              <div className="spark-bar" style={{ height: `${h}px` }} />
+              <div className="spark-label">{String(row?.label)}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StackedPassFailChart({ title, rows = [], emptyText = 'No test-type coverage yet.' }) {
+  if (!rows.length) {
+    return (
+      <div className="chart-card">
+        <h3>{title}</h3>
+        <div className="small">{emptyText}</div>
+      </div>
+    );
+  }
+  return (
+    <div className="chart-card">
+      <h3>{title}</h3>
+      <div className="stacked-rows">
+        {rows.map((row) => {
+          const total = Number(row?.total || 0) || 1;
+          const pass = Number(row?.passed || 0);
+          const fail = Number(row?.failed || 0);
+          const passPct = Math.max(0, Math.min(100, (pass / total) * 100));
+          const failPct = Math.max(0, Math.min(100, (fail / total) * 100));
+          return (
+            <div className="stacked-row" key={String(row?.testType)}>
+              <div className="stacked-label">{String(row?.testType)}</div>
+              <div className="stacked-bar">
+                <div className="stacked-pass" style={{ width: `${passPct}%` }} />
+                <div className="stacked-fail" style={{ width: `${failPct}%` }} />
+              </div>
+              <div className="stacked-value">{pass}/{total}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function KpiRing({ label, value = 0, color = '#d45f1f' }) {
+  const safe = Number.isFinite(Number(value)) ? Math.max(0, Math.min(1, Number(value))) : 0;
+  const pct = Math.round(safe * 100);
+  return (
+    <div className="kpi-ring">
+      <div
+        className="kpi-ring-visual"
+        style={{
+          background: `conic-gradient(${color} ${pct}%, #e6edf4 ${pct}% 100%)`
+        }}
+      >
+        <div className="kpi-ring-core">{pct}%</div>
+      </div>
+      <div className="kpi-ring-label">{label}</div>
+    </div>
+  );
+}
+
 export default function HomePage() {
   const [domainsInput, setDomainsInput] = useState('');
   const [specPathsInput, setSpecPathsInput] = useState('');
@@ -426,11 +725,15 @@ export default function HomePage() {
   const [flashMessage, setFlashMessage] = useState('');
   const [running, setRunning] = useState(false);
   const [showTechnical, setShowTechnical] = useState(false);
+  const [simpleMode, setSimpleMode] = useState(true);
+  const [reportViewTab, setReportViewTab] = useState('overview');
+  const [trendMetric, setTrendMetric] = useState('run_reward');
   const [connectionProbe, setConnectionProbe] = useState({
     status: 'idle',
     backend: 'unknown',
     detail: ''
   });
+  const rlTrainMode = 'periodic';
 
   const domains = useMemo(() => parseDomainList(domainsInput), [domainsInput]);
   const specPaths = useMemo(() => parseSpecPathsMap(specPathsInput), [specPathsInput]);
@@ -478,10 +781,16 @@ export default function HomePage() {
       getField(job, ['request'], {})?.script_kind ||
       runScriptKind
   );
+  const jobRlTrainMode = String(
+    getField(job, ['request'], {})?.rlTrainMode ||
+      getField(job, ['request'], {})?.rl_train_mode ||
+      rlTrainMode
+  );
   const startedAt = getField(job, ['startedAt', 'started_at'], 'n/a');
   const completedAt = getField(job, ['completedAt', 'completed_at'], 'n/a');
   const jobId = getField(job, ['id'], '');
   const reportSummary = reportJson?.summary || null;
+  const reportMetadata = reportJson?.metadata || {};
   const generatedScriptExecution = reportJson?.generated_script_execution || {};
   const trainingStats = reportJson?.agent_lightning?.training_stats || {};
   const learningFeedback = reportJson?.learning?.feedback || {};
@@ -518,6 +827,7 @@ export default function HomePage() {
   const previousRunMetrics = stateSnapshot?.previous_run_metrics || {};
   const improvementDeltas = stateSnapshot?.improvement_deltas || {};
   const rewardBreakdown = learningFeedback?.reward_breakdown || {};
+  const failureTaxonomyBreakdown = reportSummary?.failure_taxonomy_breakdown || {};
   const resultSummaries = Object.values(results).map((r) => r?.summary || {});
   const resultDomains = Object.keys(results);
   const selectedDomainLabel = selectedReportDomain ? formatDomainLabel(selectedReportDomain) : 'none';
@@ -528,6 +838,9 @@ export default function HomePage() {
     return code === 0;
   }).length;
   const overallPassRate = reportJson ? toPct(getField(reportSummary, ['pass_rate'], null)) : 'n/a';
+  const summaryQualityGate = reportSummary ? Boolean(getField(reportSummary, ['meets_quality_gate'], false)) : null;
+  const jobState = String(job?.status || 'idle');
+  const [reportScenarioMode, setReportScenarioMode] = useState('critical');
 
   const filteredScenarios = useMemo(() => {
     const needle = scenarioSearch.trim().toLowerCase();
@@ -542,8 +855,10 @@ export default function HomePage() {
       if (!needle) {
         return true;
       }
+      const scenarioLabel = humanizeScenarioName(row).label;
       const blob = [
         row?.name,
+        scenarioLabel,
         row?.test_type,
         row?.method,
         row?.endpoint_template,
@@ -681,10 +996,201 @@ export default function HomePage() {
     }
     return String(scriptText || '');
   }, [generatedScriptContents, scriptText, selectedScriptKind]);
+  const canCopyScript = useMemo(() => {
+    const content = String(selectedScriptContent || '').trim();
+    return Boolean(content) && !isScriptLoadError(content);
+  }, [selectedScriptContent]);
 
   const selectedScriptInsights = useMemo(() => {
     return parseGeneratedScriptInsights(selectedScriptKind, selectedScriptContent);
   }, [selectedScriptContent, selectedScriptKind]);
+
+  const domainPassRateRows = useMemo(() => {
+    return Object.entries(results)
+      .map(([domain, result]) => ({
+        label: formatDomainLabel(domain),
+        value: Number(getField(result?.summary || {}, ['pass_rate', 'passRate'], 0) || 0)
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [results]);
+  const domainCoverageRows = useMemo(() => {
+    return Object.entries(results)
+      .map(([domain, result]) => {
+        const summary = result?.summary || {};
+        const total = Number(getField(summary, ['total_scenarios', 'totalScenarios'], 0) || 0);
+        const passed = Number(getField(summary, ['passed_scenarios', 'passedScenarios'], 0) || 0);
+        const failed = Math.max(0, total - passed);
+        return {
+          testType: formatDomainLabel(domain),
+          total,
+          passed,
+          failed
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+  }, [results]);
+
+  const rewardBreakdownRows = useMemo(() => {
+    return Object.entries(rewardBreakdown || {})
+      .filter(([, value]) => Number.isFinite(Number(value)))
+      .map(([label, value]) => ({
+        label: String(label).replace(/_component$/, ''),
+        value: Number(value)
+      }))
+      .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+  }, [rewardBreakdown]);
+
+  const failureTaxonomyRows = useMemo(() => {
+    return Object.entries(failureTaxonomyBreakdown || {})
+      .map(([label, value]) => ({ label: String(label), value: Number(value || 0) }))
+      .sort((a, b) => b.value - a.value);
+  }, [failureTaxonomyBreakdown]);
+
+  const trendRows = useMemo(() => {
+    const source = Array.isArray(decisionHistoryTail) ? decisionHistoryTail : [];
+    const metricKey = trendMetric === 'avg_decision_reward' ? 'average_decision_reward' : 'run_reward';
+    return source.map((item, idx) => ({
+      label: `r${idx + 1}`,
+      value: Number(getField(item, [metricKey], 0) || 0)
+    }));
+  }, [decisionHistoryTail, trendMetric]);
+  const scenarioStatusRows = useMemo(() => {
+    return [
+      { label: 'Passed', value: Number(passedScenarioCount || 0) },
+      { label: 'Failed', value: Number(failedScenarioCount || 0) }
+    ];
+  }, [failedScenarioCount, passedScenarioCount]);
+  const slowestScenarioRows = useMemo(() => {
+    return [...scenarioResults]
+      .map((row) => ({
+        label: String(row?.name || 'unknown'),
+        value: Number(row?.duration_ms || 0)
+      }))
+      .filter((row) => Number.isFinite(row.value))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
+  }, [scenarioResults]);
+  const failedByTypeRows = useMemo(() => {
+    return scenarioCoverageRows
+      .map((row) => ({
+        label: String(row?.testType || 'unknown'),
+        value: Number(row?.failed || 0)
+      }))
+      .filter((row) => row.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }, [scenarioCoverageRows]);
+  const stageMetricRows = useMemo(() => {
+    const raw = getField(reportMetadata, ['stage_metrics_ms'], {});
+    if (!raw || typeof raw !== 'object') {
+      return [];
+    }
+    return Object.entries(raw)
+      .map(([key, value]) => ({
+        label: String(key).replace(/^stage_\d+_/, '').replace(/_/g, ' '),
+        value: Number(value || 0)
+      }))
+      .filter((row) => Number.isFinite(row.value))
+      .sort((a, b) => b.value - a.value);
+  }, [reportMetadata]);
+  const reportScenarioSpotlight = useMemo(() => {
+    const rows = Array.isArray(scenarioResults) ? [...scenarioResults] : [];
+    if (!rows.length) {
+      return [];
+    }
+    const negativeTypes = new Set([
+      'authentication',
+      'authorization',
+      'security',
+      'input_validation',
+      'error_handling',
+      'boundary_testing',
+      'edge_cases'
+    ]);
+    if (reportScenarioMode === 'critical') {
+      return rows
+        .sort((a, b) => {
+          const aFail = a?.passed ? 0 : 1;
+          const bFail = b?.passed ? 0 : 1;
+          if (aFail !== bFail) {
+            return bFail - aFail;
+          }
+          return Number(b?.duration_ms || 0) - Number(a?.duration_ms || 0);
+        })
+        .slice(0, 12);
+    }
+    if (reportScenarioMode === 'negative') {
+      return rows
+        .filter((row) => {
+          const testType = String(row?.test_type || '').toLowerCase();
+          const expectedStatus = Number(row?.expected_status || 0);
+          return negativeTypes.has(testType) || expectedStatus >= 400;
+        })
+        .sort((a, b) => Number(b?.duration_ms || 0) - Number(a?.duration_ms || 0))
+        .slice(0, 12);
+    }
+    if (reportScenarioMode === 'slow') {
+      return rows
+        .sort((a, b) => Number(b?.duration_ms || 0) - Number(a?.duration_ms || 0))
+        .slice(0, 12);
+    }
+    return rows.slice(0, 12);
+  }, [reportScenarioMode, scenarioResults]);
+
+  const customerSummaryText = useMemo(() => {
+    if (!reportJson || !reportSummary) {
+      return '';
+    }
+    return [
+      `Domain: ${selectedDomainLabel}`,
+      `Total Scenarios: ${String(getField(reportSummary, ['total_scenarios'], 'n/a'))}`,
+      `Pass Rate: ${toPct(getField(reportSummary, ['pass_rate'], null))}`,
+      `Quality Gate: ${String(getField(reportSummary, ['meets_quality_gate'], 'n/a'))}`,
+      `Failed Scenarios: ${String(getField(reportSummary, ['failed_scenarios'], 'n/a'))}`,
+      `Flaky Ratio: ${String(getField(reportSummary, ['flaky_ratio'], 'n/a'))}`
+    ].join('\n');
+  }, [reportJson, reportSummary, selectedDomainLabel]);
+  const failedExamples = useMemo(() => {
+    const raw = getField(reportSummary, ['failed_examples'], []);
+    return Array.isArray(raw) ? raw.slice(0, 6) : [];
+  }, [reportSummary]);
+  const qualityFailReasons = useMemo(() => {
+    const raw = getField(reportSummary, ['quality_gate_fail_reasons'], []);
+    return Array.isArray(raw) ? raw : [];
+  }, [reportSummary]);
+  const qualityWarnings = useMemo(() => {
+    const raw = getField(reportSummary, ['quality_gate_warnings'], []);
+    return Array.isArray(raw) ? raw : [];
+  }, [reportSummary]);
+  const reportRiskLevel = useMemo(() => {
+    const pass = Number(getField(reportSummary, ['pass_rate'], 0) || 0);
+    const failed = Number(getField(reportSummary, ['failed_scenarios'], 0) || 0);
+    const flaky = Number(getField(reportSummary, ['flaky_ratio'], 0) || 0);
+    if (pass >= 0.95 && failed === 0 && flaky <= 0.05) {
+      return 'low';
+    }
+    if (pass >= 0.8 && failed <= 3 && flaky <= 0.15) {
+      return 'moderate';
+    }
+    return 'high';
+  }, [reportSummary]);
+  const recommendedActions = useMemo(() => {
+    const out = [];
+    const pass = Number(getField(reportSummary, ['pass_rate'], 0) || 0);
+    const flaky = Number(getField(reportSummary, ['flaky_ratio'], 0) || 0);
+    if (pass < 0.9) {
+      out.push('Re-run with persistence enabled and compare changed failures.');
+    }
+    if (flaky > 0.1) {
+      out.push('Investigate flaky scenarios first before accepting the run.');
+    }
+    if (failedExamples.length > 0) {
+      out.push('Prioritize top failed endpoints and publish a fix/retest checklist.');
+    }
+    if (out.length === 0) {
+      out.push('No immediate action required. Report is ready to share.');
+    }
+    return out.slice(0, 4);
+  }, [failedExamples.length, reportSummary]);
 
   const reportSelectionSelected = toNumberOrNull(getField(selectionPolicy, ['selected_count', 'selectedCount'], null));
   const reportSelectionCandidates = toNumberOrNull(getField(selectionPolicy, ['candidate_count', 'candidateCount'], null));
@@ -799,7 +1305,7 @@ export default function HomePage() {
       },
       {
         id: 'scenario_context',
-        title: '7) Scenario Context (LLM/GAM/RL Influence)',
+        title: '7) Scenario Context (LLM/GAM/Mutation Influence)',
         ready: Boolean(reportJson?.scenario_context),
         payload: {
           scenario_context: reportJson?.scenario_context || null,
@@ -840,8 +1346,8 @@ export default function HomePage() {
         payload: reportJson?.gam || null
       },
       {
-        id: 'rl_training',
-        title: '11) RL Training State',
+        id: 'learning_buffer',
+        title: '11) Learning Buffer and Scheduled Trainer State',
         ready: Boolean(reportJson?.agent_lightning || reportJson?.learning),
         payload: {
           learning: reportJson?.learning || null,
@@ -913,8 +1419,8 @@ export default function HomePage() {
         scenarioResults.length > 0
       );
     }
-    if (stepId === 'rl_training') {
-      return logText.includes('RL training executed') || (rlStepValue !== null && rlStepValue > 0);
+    if (stepId === 'learning_buffer') {
+      return scenarioResults.length > 0 || reportReadyDomains > 0 || jobState === 'completed';
     }
     if (stepId === 'reports_emitted') {
       return logText.includes('qa_execution_report.json') || reportReadyDomains > 0;
@@ -932,8 +1438,8 @@ export default function HomePage() {
     if (stepId === 'isolated_execution') {
       return `actual: domains_completed=${completedDomains}`;
     }
-    if (stepId === 'rl_training') {
-      return `actual: rl_steps=${rlStepValue === null ? 'n/a' : rlStepValue}`;
+    if (stepId === 'learning_buffer') {
+      return `actual: mode=periodic (fixed) | model_steps=${rlStepValue === null ? 'n/a' : rlStepValue} | buffer=${String(getField(trainingStats, ['rl_buffer_size'], 'n/a'))}`;
     }
     if (stepId === 'reports_emitted') {
       return `actual: report_ready_domains=${reportReadyDomains}`;
@@ -1039,6 +1545,7 @@ export default function HomePage() {
       maxRuntimeSec: Number(maxRuntimeSec) > 0 ? Number(maxRuntimeSec) : null,
       llmTokenCap: Number(llmTokenCap) > 0 ? Number(llmTokenCap) : null,
       environmentProfile,
+      rlTrainMode,
       passThreshold,
       baseUrl,
       customerMode,
@@ -1122,6 +1629,20 @@ export default function HomePage() {
     setGeneratedScriptContents(next);
     setGeneratedScriptsLoadedDomain(domain);
     setGeneratedScriptsLoading(false);
+    const firstUsableKind = pickFirstUsableScriptKind(items, next);
+    if (firstUsableKind) {
+      setSelectedScriptKind(firstUsableKind);
+      setScriptText(String(next[firstUsableKind] || ''));
+      return;
+    }
+    const firstAnyKind = String(items?.[0]?.kind || '');
+    if (firstAnyKind) {
+      setSelectedScriptKind(firstAnyKind);
+      setScriptText(String(next[firstAnyKind] || 'Script is unavailable for preview.'));
+    } else {
+      setSelectedScriptKind('');
+      setScriptText('No generated scripts are available for this domain.');
+    }
   }
 
   async function openReport(domain, format) {
@@ -1211,6 +1732,31 @@ export default function HomePage() {
       setScriptText(raw || `Script ${kind} is empty.`);
     } catch (error) {
       setScriptText(`Failed to load script ${kind}: ${String(error)}`);
+    }
+  }
+
+  async function downloadScript() {
+    const content = String(selectedScriptContent || '').trim();
+    if (!content || isScriptLoadError(content)) {
+      setFlash('No valid script selected');
+      return;
+    }
+    const domainPart = sanitizeDomainToken(generatedTestsDomain || selectedReportDomain || 'domain') || 'domain';
+    const kindPart = sanitizeDomainToken(selectedScriptKind || 'script') || 'script';
+    const fileName = `${domainPart}_${kindPart}.txt`;
+    try {
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+      setFlash(`Downloaded ${fileName}`);
+    } catch {
+      setFlash('Failed to download script');
     }
   }
 
@@ -1325,29 +1871,76 @@ export default function HomePage() {
       <header className="header">
         <div className="header-row">
           <div>
-            <h1>SpecForge QA Workspace</h1>
-            <p className="header-subtitle">Run QA agent, review scripts, inspect tested cases, and deliver reports.</p>
+            <p className="header-kicker">SPECFORGE STUDIO</p>
+            <Typography variant="h4" component="h1">Customer QA Command Center</Typography>
+            <p className="header-subtitle">Start a run, monitor quality, and deliver a clear share-ready report.</p>
           </div>
-          <div className="header-badges">
-            <span className="header-badge">status={job?.status || 'idle'}</span>
-            <span className="header-badge">domains={resultDomains.length}</span>
-            <span className="header-badge">success={successDomainCount}</span>
-            <span className="header-badge">pass_rate={overallPassRate}</span>
-            <span className={`header-badge ${API_BASE ? 'ok' : 'warn'}`}>
-              mode={API_BASE ? 'fastapi' : 'next_proxy'}
-            </span>
-            <span className="header-badge">backend={API_BASE || 'same-origin'}</span>
-            <span className={`header-badge ${connectionProbe.status === 'ok' && connectionProbe.backend === 'fastapi' ? 'ok' : 'warn'}`}>
-              probe={connectionProbe.status}:{connectionProbe.backend}
-            </span>
-          </div>
+          <Stack direction="row" flexWrap="wrap" gap={1} justifyContent="flex-end" className="header-badges">
+            <Chip size="small" label={`status=${job?.status || 'idle'}`} variant="outlined" />
+            <Chip size="small" label={`domains=${resultDomains.length}`} variant="outlined" />
+            <Chip size="small" label={`success=${successDomainCount}`} variant="outlined" />
+            <Chip size="small" label={`pass_rate=${overallPassRate}`} variant="outlined" />
+            <Chip
+              size="small"
+              label={`runtime=${API_BASE ? 'fastapi' : 'next_proxy'}`}
+              color={API_BASE ? 'success' : 'warning'}
+              variant="outlined"
+            />
+            <Chip size="small" label={`backend=${API_BASE || 'same-origin'}`} variant="outlined" />
+            <Chip
+              size="small"
+              label={`probe=${connectionProbe.status}:${connectionProbe.backend}`}
+              color={connectionProbe.status === 'ok' && connectionProbe.backend === 'fastapi' ? 'success' : 'warning'}
+              variant="outlined"
+            />
+            <Chip
+              size="small"
+              label={simpleMode ? 'view=simple' : 'view=advanced'}
+              color={simpleMode ? 'primary' : 'default'}
+              variant={simpleMode ? 'filled' : 'outlined'}
+              onClick={() => setSimpleMode((v) => !v)}
+              clickable
+            />
+          </Stack>
         </div>
-        {flashMessage && <div className="toast">{flashMessage}</div>}
+        {flashMessage && <Alert severity="info" className="toast">{flashMessage}</Alert>}
       </header>
 
+      <Box className="quick-nav">
+        <Button size="small" variant="outlined" href="#run-config">Run Setup</Button>
+        <Button size="small" variant="outlined" href="#runtime-status">Live Status</Button>
+        <Button size="small" variant="outlined" href="#domain-results">Domain Health</Button>
+        {!simpleMode && <Button size="small" variant="outlined" href="#generated-scripts">Generated Scripts</Button>}
+        {!simpleMode && <Button size="small" variant="outlined" href="#cases-tested">Test Results</Button>}
+        <Button size="small" variant="outlined" href="#final-report">Customer Report</Button>
+      </Box>
+
+      <section className="overview-strip">
+        <div className={`overview-pill status-${jobState}`}>
+          <span>Run Status</span>
+          <strong>{jobState}</strong>
+        </div>
+        <div className="overview-pill">
+          <span>Completed Domains</span>
+          <strong>{String(completedDomains)}</strong>
+        </div>
+        <div className="overview-pill">
+          <span>Successful Domains</span>
+          <strong>{String(successDomainCount)}</strong>
+        </div>
+        <div className="overview-pill">
+          <span>Overall Pass Rate</span>
+          <strong>{overallPassRate}</strong>
+        </div>
+        <div className={`overview-pill ${summaryQualityGate === true ? 'ok' : summaryQualityGate === false ? 'bad' : ''}`}>
+          <span>Quality Gate</span>
+          <strong>{summaryQualityGate === null ? 'n/a' : summaryQualityGate ? 'pass' : 'fail'}</strong>
+        </div>
+      </section>
+
       <div className="layout">
-        <section className="card">
-          <h2>Run Configuration</h2>
+        <section className="card card-config" id="run-config">
+          <h2>Start New QA Run</h2>
 
           <div className="field">
             <label>Domain (predefined)</label>
@@ -1421,50 +2014,6 @@ export default function HomePage() {
           </div>
 
           <div className="field">
-            <label>Script Language</label>
-            <select value={runScriptKind} onChange={(e) => setRunScriptKind(e.target.value)}>
-              {SCRIPT_KINDS.map((kind) => (
-                <option key={kind} value={kind}>
-                  {SCRIPT_KIND_LABELS[kind] || kind}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="field">
-            <label>Max Scenarios</label>
-            <input
-              type="number"
-              min={1}
-              max={500}
-              value={maxScenarios}
-              onChange={(e) => setMaxScenarios(Number(e.target.value || 16))}
-            />
-          </div>
-
-          <div className="field">
-            <label>Max Runtime Seconds (optional)</label>
-            <input
-              type="number"
-              min={0}
-              max={7200}
-              value={maxRuntimeSec}
-              onChange={(e) => setMaxRuntimeSec(Number(e.target.value || 0))}
-            />
-          </div>
-
-          <div className="field">
-            <label>LLM Token Cap (optional)</label>
-            <input
-              type="number"
-              min={0}
-              max={16000}
-              value={llmTokenCap}
-              onChange={(e) => setLlmTokenCap(Number(e.target.value || 0))}
-            />
-          </div>
-
-          <div className="field">
             <label>Environment Profile</label>
             <select value={environmentProfile} onChange={(e) => setEnvironmentProfile(e.target.value)}>
               <option value="mock">mock</option>
@@ -1485,23 +2034,70 @@ export default function HomePage() {
             />
           </div>
 
-          <div className="field">
-            <label>Base URL</label>
-            <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
-            <div className="small">
-              Used as `BASE_URL` inside generated test scripts. Default from `NEXT_PUBLIC_TEST_BASE_URL`.
+          <details className="advanced">
+            <summary>Advanced run controls</summary>
+            <div className="field">
+              <label>Script Language</label>
+              <select value={runScriptKind} onChange={(e) => setRunScriptKind(e.target.value)}>
+                {SCRIPT_KINDS.map((kind) => (
+                  <option key={kind} value={kind}>
+                    {SCRIPT_KIND_LABELS[kind] || kind}
+                  </option>
+                ))}
+              </select>
             </div>
-          </div>
 
-          <div className="field">
-            <label>Customer Root</label>
-            <input value={customerRoot} onChange={(e) => setCustomerRoot(e.target.value)} />
-          </div>
+            <div className="field">
+              <label>Max Scenarios</label>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={maxScenarios}
+                onChange={(e) => setMaxScenarios(Number(e.target.value || 16))}
+              />
+            </div>
 
-          <div className="field">
-            <label>Prompt (optional)</label>
-            <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} />
-          </div>
+            <div className="field">
+              <label>Max Runtime Seconds (optional)</label>
+              <input
+                type="number"
+                min={0}
+                max={7200}
+                value={maxRuntimeSec}
+                onChange={(e) => setMaxRuntimeSec(Number(e.target.value || 0))}
+              />
+            </div>
+
+            <div className="field">
+              <label>LLM Token Cap (optional)</label>
+              <input
+                type="number"
+                min={0}
+                max={16000}
+                value={llmTokenCap}
+                onChange={(e) => setLlmTokenCap(Number(e.target.value || 0))}
+              />
+            </div>
+
+            <div className="field">
+              <label>Base URL</label>
+              <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+              <div className="small">
+                Used as `BASE_URL` inside generated test scripts. Default from `NEXT_PUBLIC_TEST_BASE_URL`.
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Customer Root</label>
+              <input value={customerRoot} onChange={(e) => setCustomerRoot(e.target.value)} />
+            </div>
+
+            <div className="field">
+              <label>Prompt (optional)</label>
+              <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+            </div>
+          </details>
 
           <div className="checks">
             <label>
@@ -1510,7 +2106,7 @@ export default function HomePage() {
                 checked={customerMode}
                 onChange={(e) => setCustomerMode(e.target.checked)}
               />{' '}
-              customer mode (persistent workspace/checkpoint)
+              save workspace and model checkpoint
             </label>
             <label>
               <input
@@ -1518,33 +2114,47 @@ export default function HomePage() {
                 checked={verifyPersistence}
                 onChange={(e) => setVerifyPersistence(e.target.checked)}
               />{' '}
-              verify persistence (auto second pass, slower)
+              run a second pass for consistency check
             </label>
+          </div>
+
+          <details className="advanced">
+            <summary>Developer diagnostics and UI controls</summary>
+            <div className="checks">
             <label>
               <input
                 type="checkbox"
                 checked={showTechnical}
                 onChange={(e) => setShowTechnical(e.target.checked)}
               />{' '}
-              show technical details (logs + raw state)
+              show advanced diagnostics (engine internals)
             </label>
-          </div>
+            <label>
+              <input
+                type="checkbox"
+                checked={simpleMode}
+                onChange={(e) => setSimpleMode(e.target.checked)}
+              />{' '}
+              simple UI mode (recommended)
+            </label>
+            </div>
+          </details>
 
           <button className="primary" disabled={running} onClick={onRun}>
-            {running ? 'Running...' : 'Run QA Agent'}
+            {running ? 'Running...' : 'Start QA Run'}
           </button>
         </section>
 
         <section className="right">
-          <div className="card">
-            <h2>Runtime Status</h2>
+          <div className="card" id="runtime-status">
+            <h2>Run Progress</h2>
             <div className="status">
               <span className={`dot ${job?.status || ''}`} />
               <strong>{job?.status || 'idle'}</strong>
             </div>
             <div className="meta">
               {job
-                ? `job=${jobId} | current_domain=${currentDomain} | script_kind=${jobScriptKind} | started=${startedAt} | completed=${completedAt}`
+                ? `job=${jobId} | current_domain=${currentDomain} | script_kind=${jobScriptKind} | started=${formatDateTime(startedAt)} | completed=${formatDateTime(completedAt)}`
                 : 'No run started yet.'}
             </div>
             <div className="steps">
@@ -1559,8 +2169,55 @@ export default function HomePage() {
             </div>
           </div>
 
+          {simpleMode && (
           <div className="card">
-            <h2>RL Improvement Over Time</h2>
+            <h2>Simple View</h2>
+            <div className="small">
+              Showing essentials only: Run Progress, Domain Health, and Customer Report.
+              Switch to advanced view to inspect generated scripts and detailed scenario analytics.
+            </div>
+            <div className="inline-actions">
+              <Button size="small" variant="contained" onClick={() => setSimpleMode(false)}>
+                Open Advanced View
+              </Button>
+            </div>
+          </div>
+          )}
+
+          {!simpleMode && (
+          <div className="card">
+            <h2>Customer Checklist</h2>
+            <div className="report-grid">
+              <div className="report-metric">
+                <span>1. Run Started</span>
+                <strong>{jobId ? 'done' : 'pending'}</strong>
+              </div>
+              <div className="report-metric">
+                <span>2. Domain Outputs Ready</span>
+                <strong>{reportReadyDomains > 0 ? 'done' : 'pending'}</strong>
+              </div>
+              <div className="report-metric">
+                <span>3. Report Selected</span>
+                <strong>{selectedReportDomain ? 'done' : 'pending'}</strong>
+              </div>
+              <div className="report-metric">
+                <span>4. Quality Gate</span>
+                <strong>{summaryQualityGate === null ? 'pending' : summaryQualityGate ? 'pass' : 'fail'}</strong>
+              </div>
+              <div className="report-metric">
+                <span>5. Shareable Output</span>
+                <strong>{selectedReportDomain ? selectedReportFormat.toUpperCase() : 'pending'}</strong>
+              </div>
+            </div>
+            <div className="small">
+              tip: open <b>Domain Health</b>, choose a domain, then load JSON/Markdown report for handoff.
+            </div>
+          </div>
+          )}
+
+          {showTechnical && (
+          <div className="card">
+            <h2>Model Buffer and Policy Progress</h2>
             {!reportJson && (
               <div className="small">Open a domain JSON report to see learning progress per run.</div>
             )}
@@ -1572,11 +2229,11 @@ export default function HomePage() {
                     <strong>{String(getField(stateSnapshot, ['run_count'], 'n/a'))}</strong>
                   </div>
                   <div className="report-metric">
-                    <span>RL Steps</span>
+                    <span>Model Steps</span>
                     <strong>{String(getField(trainingStats, ['rl_training_steps'], 'n/a'))}</strong>
                   </div>
                   <div className="report-metric">
-                    <span>RL Buffer</span>
+                    <span>Buffer Size</span>
                     <strong>{String(getField(trainingStats, ['rl_buffer_size'], 'n/a'))}</strong>
                   </div>
                   <div className="report-metric">
@@ -1632,9 +2289,11 @@ export default function HomePage() {
               </>
             )}
           </div>
+          )}
 
+          {showTechnical && (
           <div className="card">
-            <h2>Scenario Influence Map (LLM vs GAM vs RL)</h2>
+            <h2>Scenario Influence Map (Generator vs Memory vs Mutation)</h2>
             {!reportJson && (
               <div className="small">Open a domain JSON report to inspect how each component influenced the run.</div>
             )}
@@ -1646,7 +2305,7 @@ export default function HomePage() {
                     <strong>{String(getField(selectionPolicy, ['base_candidate_count'], getField(scenarioContextCounts, ['base_generated'], 'n/a')))}</strong>
                   </div>
                   <div className="report-metric">
-                    <span>RL Added Candidates</span>
+                    <span>Mutation Added Candidates</span>
                     <strong>{String(getField(mutationPolicy, ['mutated_candidates_added'], 0))}</strong>
                   </div>
                   <div className="report-metric">
@@ -1674,8 +2333,8 @@ export default function HomePage() {
                     <strong>{String(getField(gamDiagnostics, ['quality_score'], 'n/a'))}</strong>
                   </div>
                   <div className="report-metric">
-                    <span>RL Training Enabled</span>
-                    <strong>{String(getField(trainingStats, ['training_enabled'], 'n/a'))}</strong>
+                    <span>Training Mode</span>
+                    <strong>{String(getField(trainingStats, ['train_mode'], jobRlTrainMode || 'periodic'))}</strong>
                   </div>
                 </div>
 
@@ -1705,11 +2364,11 @@ export default function HomePage() {
                       <strong>{String(executedScenarioSources.heuristicBase)}</strong>
                     </div>
                     <div className="report-metric">
-                      <span>RL Mutation Executed</span>
+                      <span>Mutation Executed</span>
                       <strong>{String(executedScenarioSources.rlMutation)}</strong>
                     </div>
                     <div className="report-metric">
-                      <span>RL History-Seed Executed</span>
+                      <span>History-Seed Executed</span>
                       <strong>{String(executedScenarioSources.rlHistorySeed)}</strong>
                     </div>
                     <div className="report-metric">
@@ -1722,7 +2381,7 @@ export default function HomePage() {
                     </div>
                   </div>
                   <div className="small">
-                    interpretation: LLM creates base candidates, GAM enriches the prompt/research context, RL expands and selects high-value scenarios.
+                    interpretation: LLM creates base candidates, GAM enriches planning context, mutation policies diversify scenarios, and model checkpoint updates happen on periodic jobs.
                   </div>
                   {selectedScenarioContextRows.length > 0 && (
                     <div className="scenario-table-wrap">
@@ -1741,19 +2400,25 @@ export default function HomePage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {selectedScenarioContextRows.map((item, idx) => (
-                            <tr key={`${String(item?.fingerprint || item?.name || 'row')}-${idx}`}>
-                              <td>{String(getField(item, ['name'], 'n/a'))}</td>
-                              <td>{String(getField(item, ['source'], 'n/a'))}</td>
-                              <td>{String(getField(item, ['mutation_strategy'], '')) || '-'}</td>
-                              <td>{String(getField(item, ['selection_reason'], 'n/a'))}</td>
-                              <td>{String(getField(item, ['historical_seen_before'], 'n/a'))}</td>
-                              <td>{String(getField(item, ['historical_failure_rate_before'], 'n/a'))}</td>
-                              <td>{String(getField(item, ['expected_status'], 'n/a'))}</td>
-                              <td>{String(getField(item, ['actual_status'], 'n/a'))}</td>
-                              <td>{String(getField(item, ['passed'], 'n/a'))}</td>
-                            </tr>
-                          ))}
+                          {selectedScenarioContextRows.map((item, idx) => {
+                            const scenarioInfo = humanizeScenarioName(item);
+                            return (
+                              <tr key={`${String(item?.fingerprint || item?.name || 'row')}-${idx}`}>
+                                <td title={scenarioInfo.rawName || scenarioInfo.label}>
+                                  <div>{scenarioInfo.label}</div>
+                                  <div className="small">raw: {scenarioInfo.rawName || 'n/a'}</div>
+                                </td>
+                                <td>{String(getField(item, ['source'], 'n/a'))}</td>
+                                <td>{String(getField(item, ['mutation_strategy'], '')) || '-'}</td>
+                                <td>{String(getField(item, ['selection_reason'], 'n/a'))}</td>
+                                <td>{String(getField(item, ['historical_seen_before'], 'n/a'))}</td>
+                                <td>{String(getField(item, ['historical_failure_rate_before'], 'n/a'))}</td>
+                                <td>{String(getField(item, ['expected_status'], 'n/a'))}</td>
+                                <td>{String(getField(item, ['actual_status'], 'n/a'))}</td>
+                                <td>{String(getField(item, ['passed'], 'n/a'))}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -1830,7 +2495,7 @@ export default function HomePage() {
 
                 <div className="scenario-panel">
                   <div className="scenario-head">
-                    <h3>RL Mutation Influence (Examples)</h3>
+                    <h3>Mutation Influence (Examples)</h3>
                   </div>
                   {mutationStrategyBreakdown.length > 0 && (
                     <div className="small">
@@ -1838,7 +2503,7 @@ export default function HomePage() {
                     </div>
                   )}
                   {rlMutationExamples.length === 0 && (
-                    <div className="small">No RL mutation examples recorded in this run.</div>
+                    <div className="small">No mutation examples recorded in this run.</div>
                   )}
                   {rlMutationExamples.length > 0 && (
                     <div className="scenario-table-wrap">
@@ -1876,6 +2541,7 @@ export default function HomePage() {
               </>
             )}
           </div>
+          )}
 
           {showTechnical && (
           <div className="card">
@@ -1916,8 +2582,21 @@ export default function HomePage() {
           </div>
           )}
 
-          <div className="card">
-            <h2>Domain Results</h2>
+          <div className="card" id="domain-results">
+            <h2>Domain Health</h2>
+            {Object.keys(results).length > 0 && (
+              <div className="charts-grid">
+                <BarListChart
+                  title="All Domain Pass Rates"
+                  rows={domainPassRateRows}
+                  valueFormatter={(v) => `${(v * 100).toFixed(1)}%`}
+                />
+                <StackedPassFailChart
+                  title="Domain Scenario Outcomes (Pass/Fail)"
+                  rows={domainCoverageRows}
+                />
+              </div>
+            )}
             <div className="results">
               {Object.keys(results).length === 0 && <div className="small">No domain results yet.</div>}
               {Object.entries(results).map(([domain, result]) => {
@@ -1931,8 +2610,6 @@ export default function HomePage() {
                 const totalScenarios = getField(s, ['totalScenarios', 'total_scenarios'], 'n/a');
                 const passedScenarios = getField(s, ['passedScenarios', 'passed_scenarios'], 'n/a');
                 const failedScenarios = getField(s, ['failedScenarios', 'failed_scenarios'], 'n/a');
-                const rlSteps = getField(s, ['rlTrainingSteps', 'rl_training_steps'], 'n/a');
-                const rlBuffer = getField(s, ['rlBufferSize', 'rl_buffer_size'], 'n/a');
                 const scriptKindValue =
                   getField(result, ['scriptKind', 'script_kind'], null) ||
                   getField(s, ['scriptKind', 'script_kind'], null) ||
@@ -1948,22 +2625,21 @@ export default function HomePage() {
                       <br />
                       total={String(totalScenarios)} passed={String(passedScenarios)} failed={String(failedScenarios)}
                       <br />
-                      rl_steps={String(rlSteps)} rl_buffer={String(rlBuffer)}
-                      <br />
                       script_kind={String(scriptKindValue)}
                       <br />
                       return_code={String(code)}
                       <br />
                       generated_scripts={String(generatedCount)}
                     </div>
-                    <button onClick={() => openReport(domain, 'json')}>Open Customer Output</button>
-                    <button onClick={() => openReport(domain, 'md')}>Open Markdown Report</button>
+                  <button onClick={() => openReport(domain, 'json')}>Open Interactive Report</button>
+                    <button onClick={() => openReport(domain, 'md')}>Open Shareable Markdown</button>
                   </div>
                 );
               })}
             </div>
           </div>
 
+          {!simpleMode && (
           <div className="card">
             <details className="advanced">
               <summary>Customer Output (Click to Open/Close)</summary>
@@ -1986,7 +2662,7 @@ export default function HomePage() {
                   ))}
                 </select>
                 <button disabled={!outputDomain} onClick={() => openSelectedDomainOutput('json')}>
-                  Load Output
+                  Load Interactive Report
                 </button>
                 <button disabled={!outputDomain} onClick={() => openSelectedDomainOutput('md')}>
                   Load Markdown
@@ -1998,7 +2674,9 @@ export default function HomePage() {
               )}
             </details>
           </div>
+          )}
 
+          {showTechnical && (
           <div className="card">
             <details className="advanced">
               <summary>Prompt Used By Agent (Click to Open/Close)</summary>
@@ -2012,9 +2690,9 @@ export default function HomePage() {
                   <div className="small">
                     base_prompt_length={String((promptTrace?.base_prompt || '').length)} | effective_prompt_length=
                     {String((promptTrace?.effective_prompt || '').length)} | gam_focus_points=
-                    {String(promptTrace?.gam_focus_points_used_count || 0)} | rl_focus_points=
+                    {String(promptTrace?.gam_focus_points_used_count || 0)} | adaptive_focus_points=
                     {String(promptTrace?.rl_focus_points_used_count || 0)} | gam_enriched=
-                    {String(Boolean(promptTrace?.prompt_was_enriched_by_gam))} | rl_enriched=
+                    {String(Boolean(promptTrace?.prompt_was_enriched_by_gam))} | adaptive_enriched=
                     {String(Boolean(promptTrace?.prompt_was_enriched_by_rl))}
                   </div>
                   <div className="small">
@@ -2052,7 +2730,7 @@ export default function HomePage() {
                   </details>
                   <details className="advanced" open={Boolean((promptTrace?.rl_focus_points_used || []).length)}>
                     <summary>
-                      RL Focus Points Added Into Prompt ({String((promptTrace?.rl_focus_points_used || []).length)})
+                      Adaptive Focus Points Added Into Prompt ({String((promptTrace?.rl_focus_points_used || []).length)})
                     </summary>
                     <pre>{toJsonString(promptTrace?.rl_focus_points_used || [])}</pre>
                   </details>
@@ -2072,45 +2750,48 @@ export default function HomePage() {
               )}
             </details>
           </div>
+          )}
 
+          {showTechnical && (
           <div className="card">
             <details className="advanced">
-              <summary>Where RL Is Used (Click to Open/Close)</summary>
+              <summary>Where Adaptive Optimization Is Used (Click to Open/Close)</summary>
               {!reportJson && (
-                <div className="small">Load customer output first to view runtime RL usage locations.</div>
+                <div className="small">Load customer output first to view runtime optimization usage locations.</div>
               )}
               {reportJson && (
                 <pre>{toJsonString({
-                  rl_prompt_influence: {
+                  adaptive_prompt_influence: {
                     prompt_was_enriched_by_rl: Boolean(promptTrace?.prompt_was_enriched_by_rl),
                     rl_focus_points_used_count: Number(promptTrace?.rl_focus_points_used_count || 0),
                     rl_focus_points_used: promptTrace?.rl_focus_points_used || []
                   },
-                  rl_mutation_stage: {
+                  mutation_stage: {
                     mutated_candidates_added: Number(getField(mutationPolicy, ['mutated_candidates_added'], 0)),
                     direct_mutation_candidates_added: Number(getField(mutationPolicy, ['direct_mutation_candidates_added'], 0)),
                     history_seed_candidates_added: Number(getField(mutationPolicy, ['history_seed_candidates_added'], 0)),
                     top_targets: getField(mutationPolicy, ['top_targets'], []).slice(0, 5)
                   },
-                  rl_selection_stage: {
+                  selection_stage: {
                     algorithm: getField(selectionPolicy, ['algorithm'], 'n/a'),
                     candidate_count: Number(getField(selectionPolicy, ['candidate_count'], 0)),
                     selected_count: Number(getField(selectionPolicy, ['selected_count'], 0)),
                     uncertain_selected_count: Number(getField(selectionPolicy, ['uncertain_selected_count'], 0)),
                     top_decisions: topDecisions.slice(0, 5)
                   },
-                  rl_training_stage: {
+                  periodic_training_stage: {
                     training_enabled: Boolean(getField(trainingStats, ['training_enabled'], false)),
                     rl_training_steps: Number(getField(trainingStats, ['rl_training_steps'], 0)),
                     rl_buffer_size: Number(getField(trainingStats, ['rl_buffer_size'], 0)),
                     rewarded_decisions: Number(getField(learningFeedback, ['rewarded_decisions'], 0)),
                     penalized_decisions: Number(getField(learningFeedback, ['penalized_decisions'], 0))
                   },
-                  note: "RL optimizes scenario mutation/selection/training. GAM now supports LLM-driven planning/reflection (see GAM Research Influence for plan_mode/reflect_mode and llm_stats)."
+                  note: "Mutation and selection policies optimize coverage during runs, while model updates happen periodically in background mode. GAM supports LLM-driven planning/reflection (see GAM Research Influence for plan_mode/reflect_mode and llm_stats)."
                 })}</pre>
               )}
             </details>
           </div>
+          )}
 
           {showTechnical && (
           <div className="card">
@@ -2135,8 +2816,9 @@ export default function HomePage() {
           </div>
           )}
 
-          <div className="card">
-            <h2>1) Test Scripts Generated By Agent</h2>
+          {!simpleMode && (
+          <div className="card" id="generated-scripts">
+            <h2>Generated Test Scripts</h2>
             <div className="script-summary-grid">
               <div className="script-summary-item">
                 <span>Selected Domain</span>
@@ -2171,12 +2853,14 @@ export default function HomePage() {
             )}
             {generatedTests.length > 0 && (
               <div className="inline-actions">
-                <button
+                <Button
+                  size="small"
+                  variant="outlined"
                   onClick={() => loadGeneratedTests(generatedTestsDomain || selectedStateDomain, generatedTests)}
                   disabled={generatedScriptsLoading || !(generatedTestsDomain || selectedStateDomain)}
                 >
                   Reload Script Bundle From API
-                </button>
+                </Button>
               </div>
             )}
             {generatedTests.length > 0 && (
@@ -2203,12 +2887,14 @@ export default function HomePage() {
                         <td>{item.safe_to_read ? 'yes' : 'no'}</td>
                         <td>{formatBytes(item.size_bytes)}</td>
                         <td>
-                          <button
+                          <Button
+                            size="small"
+                            variant="outlined"
                             disabled={!item.exists || !item.safe_to_read || !generatedTestsDomain}
                             onClick={() => openGeneratedScript(generatedTestsDomain, item.kind)}
                           >
                             Preview
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -2280,14 +2966,26 @@ export default function HomePage() {
             <div className="script-preview-head">
               <div className="small">Selected Script: {selectedScriptKind || 'none'}</div>
               <div className="inline-actions">
-                <button onClick={() => copyText('script', scriptText)}>Copy Script</button>
+                <Button size="small" variant="outlined" onClick={() => copyText('script', selectedScriptContent)} disabled={!canCopyScript}>
+                  Copy Script
+                </Button>
+                <Button size="small" variant="contained" onClick={downloadScript} disabled={!canCopyScript}>
+                  Download Script
+                </Button>
               </div>
             </div>
-            <pre className="script-preview">{scriptText}</pre>
+            {!canCopyScript && (
+              <Alert severity="warning" sx={{ mt: 1 }}>
+                Script preview is unavailable. Select a readable script from the table.
+              </Alert>
+            )}
+            <pre className="script-preview">{selectedScriptContent || 'Select a generated test script to preview.'}</pre>
           </div>
+          )}
 
-          <div className="card">
-            <h2>2) Cases Tested By Agent</h2>
+          {!simpleMode && (
+          <div className="card" id="cases-tested">
+            <h2>Test Results</h2>
             <div className="small">
               selected_domain={selectedDomainLabel} | total={scenarioResults.length} | passed={passedScenarioCount} |
               failed={failedScenarioCount}
@@ -2307,7 +3005,7 @@ export default function HomePage() {
                     <strong>{String(scenarioCoverageRows.length)}</strong>
                   </div>
                   <div className="report-metric">
-                    <span>RL Scenarios Executed</span>
+                    <span>Mutation Scenarios Executed</span>
                     <strong>{String(rlExecutedScenarioCount)}</strong>
                   </div>
                   <div className="report-metric">
@@ -2315,7 +3013,7 @@ export default function HomePage() {
                     <strong>{String(historySeedExecutedCount)}</strong>
                   </div>
                   <div className="report-metric">
-                    <span>Direct RL Mutations Added</span>
+                    <span>Direct Mutations Added</span>
                     <strong>{String(getField(mutationPolicy, ['direct_mutation_candidates_added'], 0))}</strong>
                   </div>
                   <div className="report-metric">
@@ -2324,37 +3022,67 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                <div className="scenario-panel">
-                  <div className="scenario-head">
-                    <h3>Coverage By Test Type</h3>
-                  </div>
-                  <div className="scenario-table-wrap">
-                    <table className="scenario-table">
-                      <thead>
-                        <tr>
-                          <th>test_type</th>
-                          <th>total</th>
-                          <th>passed</th>
-                          <th>failed</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {scenarioCoverageRows.map((row) => (
-                          <tr key={row.testType}>
-                            <td>{row.testType}</td>
-                            <td>{String(row.total)}</td>
-                            <td>{String(row.passed)}</td>
-                            <td>{String(row.failed)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className="charts-grid">
+                  <BarListChart
+                    title="Scenario Outcome Mix"
+                    rows={scenarioStatusRows}
+                    valueFormatter={(v) => String(Math.round(v))}
+                  />
+                  <BarListChart
+                    title="Slowest Scenarios (ms)"
+                    rows={slowestScenarioRows}
+                    valueFormatter={(v) => `${v.toFixed(1)} ms`}
+                    emptyText="No scenario duration data."
+                  />
+                </div>
+
+                <div className="charts-grid">
+                  <StackedPassFailChart
+                    title="Coverage By Test Type"
+                    rows={scenarioCoverageRows}
+                  />
+                  <BarListChart
+                    title="Failed Scenarios By Test Type"
+                    rows={failedByTypeRows}
+                    valueFormatter={(v) => String(Math.round(v))}
+                    emptyText="No failed test types."
+                  />
                 </div>
 
                 <div className="scenario-panel">
                   <div className="scenario-head">
-                    <h3>What Improved Due To RL</h3>
+                    <h3>Coverage By Test Type</h3>
+                  </div>
+                  <details className="advanced">
+                    <summary>Open detailed table</summary>
+                    <div className="scenario-table-wrap">
+                      <table className="scenario-table">
+                        <thead>
+                          <tr>
+                            <th>test_type</th>
+                            <th>total</th>
+                            <th>passed</th>
+                            <th>failed</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {scenarioCoverageRows.map((row) => (
+                            <tr key={row.testType}>
+                              <td>{row.testType}</td>
+                              <td>{String(row.total)}</td>
+                              <td>{String(row.passed)}</td>
+                              <td>{String(row.failed)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                </div>
+
+                <div className="scenario-panel">
+                  <div className="scenario-head">
+                    <h3>What Improved Due To Adaptive Optimization</h3>
                   </div>
                   <div className="small">
                     rewarded_decisions={String(getField(learningFeedback, ['rewarded_decisions'], 'n/a'))} | penalized_decisions=
@@ -2362,61 +3090,79 @@ export default function HomePage() {
                   </div>
                   {rlMutationExamples.length > 0 && (
                     <div className="small rl-examples">
-                      rl_mutation_examples: {rlMutationExamples
+                      mutation_examples: {rlMutationExamples
                         .map((item) => `${String(item.from || item.from_fingerprint || 'seed')} -> ${String(item.to || 'n/a')}`)
                         .join(' | ')}
                     </div>
                   )}
-                  <div className="scenario-table-wrap">
-                    <table className="scenario-table">
-                      <thead>
-                        <tr>
-                          <th>top_improved_scenario</th>
-                          <th>reward</th>
-                          <th>type</th>
-                          <th>endpoint</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {topImprovedScenarios.length === 0 && (
-                          <tr>
-                            <td colSpan={4}>No rewarded decision signals yet.</td>
-                          </tr>
-                        )}
-                        {topImprovedScenarios.map((row) => (
-                          <tr key={`improved-${String(row.name)}`}>
-                            <td>{String(row.name)}</td>
-                            <td>{String(row.reward)}</td>
-                            <td>{String(row.test_type)}</td>
-                            <td>{`${String(row.method || '')} ${String(row.endpoint_template || '')}`.trim()}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {topFailedScenarios.length > 0 && (
+                  <details className="advanced">
+                    <summary>Open improved scenarios table</summary>
                     <div className="scenario-table-wrap">
                       <table className="scenario-table">
                         <thead>
                           <tr>
-                            <th>needs_improvement</th>
+                            <th>top_improved_scenario</th>
                             <th>reward</th>
                             <th>type</th>
                             <th>endpoint</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {topFailedScenarios.map((row) => (
-                            <tr key={`regress-${String(row.name)}`}>
-                              <td>{String(row.name)}</td>
-                              <td>{String(row.reward)}</td>
-                              <td>{String(row.test_type)}</td>
-                              <td>{`${String(row.method || '')} ${String(row.endpoint_template || '')}`.trim()}</td>
+                          {topImprovedScenarios.length === 0 && (
+                            <tr>
+                              <td colSpan={4}>No rewarded decision signals yet.</td>
                             </tr>
-                          ))}
+                          )}
+                          {topImprovedScenarios.map((row) => {
+                            const scenarioInfo = humanizeScenarioName(row);
+                            return (
+                              <tr key={`improved-${String(row.name)}`}>
+                                <td title={scenarioInfo.rawName || scenarioInfo.label}>
+                                  <div>{scenarioInfo.label}</div>
+                                  <div className="small">raw: {scenarioInfo.rawName || 'n/a'}</div>
+                                </td>
+                                <td>{String(row.reward)}</td>
+                                <td>{String(row.test_type)}</td>
+                                <td>{`${String(row.method || '')} ${String(row.endpoint_template || '')}`.trim()}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
+                  </details>
+                  {topFailedScenarios.length > 0 && (
+                    <details className="advanced">
+                      <summary>Open needs-improvement scenarios table</summary>
+                      <div className="scenario-table-wrap">
+                        <table className="scenario-table">
+                          <thead>
+                            <tr>
+                              <th>needs_improvement</th>
+                              <th>reward</th>
+                              <th>type</th>
+                              <th>endpoint</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {topFailedScenarios.map((row) => {
+                              const scenarioInfo = humanizeScenarioName(row);
+                              return (
+                                <tr key={`regress-${String(row.name)}`}>
+                                  <td title={scenarioInfo.rawName || scenarioInfo.label}>
+                                    <div>{scenarioInfo.label}</div>
+                                    <div className="small">raw: {scenarioInfo.rawName || 'n/a'}</div>
+                                  </td>
+                                  <td>{String(row.reward)}</td>
+                                  <td>{String(row.test_type)}</td>
+                                  <td>{`${String(row.method || '')} ${String(row.endpoint_template || '')}`.trim()}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
                   )}
                 </div>
 
@@ -2442,83 +3188,346 @@ export default function HomePage() {
                     <button onClick={() => setScenarioFilter('fail')}>Show Failed</button>
                   </div>
                   <div className="small">showing {filteredScenarios.length} / {scenarioResults.length}</div>
-                  <div className="scenario-table-wrap">
-                    <table className="scenario-table">
-                      <thead>
-                        <tr>
-                          <th>status</th>
-                          <th>name</th>
-                          <th>type</th>
-                          <th>endpoint</th>
-                          <th>expected</th>
-                          <th>actual</th>
-                          <th>ms</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredScenarios.map((row) => (
-                          <tr key={String(row.name)}>
-                            <td>{row.passed ? 'pass' : 'fail'}</td>
-                            <td>{row.name}</td>
-                            <td>{row.test_type}</td>
-                            <td>{`${row.method || ''} ${row.endpoint_template || ''}`.trim()}</td>
-                            <td>{String(row.expected_status ?? 'n/a')}</td>
-                            <td>{String(row.actual_status ?? 'n/a')}</td>
-                            <td>{String(row.duration_ms ?? 'n/a')}</td>
+                  <details className="advanced">
+                    <summary>Open detailed scenario table</summary>
+                    <div className="scenario-table-wrap">
+                      <table className="scenario-table">
+                        <thead>
+                          <tr>
+                            <th>status</th>
+                            <th>name</th>
+                            <th>type</th>
+                            <th>endpoint</th>
+                            <th>expected</th>
+                            <th>actual</th>
+                            <th>ms</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {filteredScenarios.map((row) => {
+                            const scenarioInfo = humanizeScenarioName(row);
+                            return (
+                              <tr key={String(row.name)}>
+                                <td>{row.passed ? 'pass' : 'fail'}</td>
+                                <td title={scenarioInfo.rawName || scenarioInfo.label}>
+                                  <div>{scenarioInfo.label}</div>
+                                  <div className="small">raw: {scenarioInfo.rawName || 'n/a'}</div>
+                                </td>
+                                <td>{row.test_type}</td>
+                                <td>{`${row.method || ''} ${row.endpoint_template || ''}`.trim()}</td>
+                                <td>{String(row.expected_status ?? 'n/a')}</td>
+                                <td>{String(row.actual_status ?? 'n/a')}</td>
+                                <td>{String(row.duration_ms ?? 'n/a')}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
                 </div>
               </>
             )}
           </div>
+          )}
 
-          <div className="card">
-            <h2>3) Final QA Report</h2>
+          <div className="card" id="final-report">
+            <h2>Customer Report</h2>
             <div className="small">
               selected_domain={selectedDomainLabel} | format={selectedReportFormat}
             </div>
             {selectedReportDomain && (
               <div className="inline-actions">
-                <button onClick={() => openReport(selectedReportDomain, 'json')}>JSON View</button>
-                <button onClick={() => openReport(selectedReportDomain, 'md')}>Markdown View</button>
-                <button onClick={() => copyText('report', reportText)}>Copy Current Report</button>
+                <Button size="small" variant="outlined" onClick={() => openReport(selectedReportDomain, 'json')}>JSON View</Button>
+                <Button size="small" variant="outlined" onClick={() => openReport(selectedReportDomain, 'md')}>Markdown View</Button>
+                <Button size="small" variant="outlined" onClick={() => copyText('report', reportText)}>Copy Current Report</Button>
+                <Button size="small" variant="contained" onClick={() => copyText('customer summary', customerSummaryText)} disabled={!customerSummaryText}>
+                  Copy Summary Snapshot
+                </Button>
               </div>
             )}
             {reportJson && (
-              <div className="report-grid">
-                <div className="report-metric">
-                  <span>Total</span>
-                  <strong>{String(getField(reportSummary, ['total_scenarios'], 'n/a'))}</strong>
+              <>
+                <Box className="report-hero">
+                  <div>
+                    <Typography variant="h6">Executive Summary</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {summaryQualityGate === true
+                        ? 'Quality gate passed. This run is suitable for customer sharing.'
+                        : 'Quality gate did not pass. Review failures before sharing externally.'}
+                    </Typography>
+                  </div>
+                  <Stack direction="row" gap={1} flexWrap="wrap">
+                    <Chip
+                      label={`Risk: ${reportRiskLevel}`}
+                      color={reportRiskLevel === 'low' ? 'success' : reportRiskLevel === 'moderate' ? 'warning' : 'error'}
+                    />
+                    <Chip label={`Pass: ${toPct(getField(reportSummary, ['pass_rate'], null))}`} />
+                    <Chip label={`Failed: ${String(getField(reportSummary, ['failed_scenarios'], 0))}`} />
+                    <Chip label={`Flaky: ${String(getField(reportSummary, ['flaky_ratio'], 0))}`} />
+                  </Stack>
+                </Box>
+
+                {(qualityFailReasons.length > 0 || qualityWarnings.length > 0) && (
+                  <Stack gap={1} sx={{ mb: 1 }}>
+                    {qualityFailReasons.length > 0 && (
+                      <Alert severity="error">
+                        Quality gate failed because: {qualityFailReasons.join(', ')}
+                      </Alert>
+                    )}
+                    {qualityWarnings.length > 0 && (
+                      <Alert severity="warning">
+                        Warnings: {qualityWarnings.join(', ')}
+                      </Alert>
+                    )}
+                  </Stack>
+                )}
+
+                <div className="report-kpi-rings">
+                  <KpiRing label="Pass Rate" value={Number(getField(reportSummary, ['pass_rate'], 0) || 0)} color="#1f7a58" />
+                  <KpiRing label="Selection Rate" value={(Number(selectionSelected || 0) > 0 && Number(selectionCandidates || 0) > 0) ? Number(selectionSelected) / Number(selectionCandidates) : 0} color="#0d5e7a" />
+                  <KpiRing label="Negative Mix" value={scenarioResults.length ? Math.min(1, (scenarioCoverageRows.filter((row) => Number(row?.failed || 0) > 0).length + failedScenarioCount) / scenarioResults.length) : 0} color="#d47b1f" />
                 </div>
-                <div className="report-metric">
-                  <span>Pass Rate</span>
-                  <strong>{toPct(getField(reportSummary, ['pass_rate'], null))}</strong>
+
+                <div className="charts-grid">
+                  <div className="chart-card">
+                    <h3>Top Findings</h3>
+                    {failedExamples.length === 0 && <div className="small">No failed examples in this report.</div>}
+                    {failedExamples.length > 0 && (
+                      <ul className="report-list">
+                        {failedExamples.map((item, idx) => {
+                          const scenarioInfo = humanizeScenarioName(item);
+                          return (
+                            <li key={`${String(item?.name || 'item')}-${idx}`} title={scenarioInfo.rawName || scenarioInfo.label}>
+                              <b>{scenarioInfo.label}</b>:
+                              {' '}expected {String(getField(item, ['expected_status'], 'n/a'))}, got {String(getField(item, ['actual_status'], 'n/a'))}
+                              {scenarioInfo.rawName && (
+                                <> | raw={scenarioInfo.rawName}</>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="chart-card">
+                    <h3>Recommended Actions</h3>
+                    <ul className="report-list">
+                      {recommendedActions.map((item, idx) => (
+                        <li key={`${item}-${idx}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
-                <div className="report-metric">
-                  <span>Quality Gate</span>
-                  <strong>{String(getField(reportSummary, ['meets_quality_gate'], 'n/a'))}</strong>
+
+                <div className="scenario-panel report-spotlight">
+                  <div className="scenario-head">
+                    <h3>Interactive Scenario Spotlight</h3>
+                    <div className="spotlight-controls">
+                      <Chip
+                        size="small"
+                        label="Critical"
+                        clickable
+                        color={reportScenarioMode === 'critical' ? 'primary' : 'default'}
+                        variant={reportScenarioMode === 'critical' ? 'filled' : 'outlined'}
+                        onClick={() => setReportScenarioMode('critical')}
+                      />
+                      <Chip
+                        size="small"
+                        label="Negative Focus"
+                        clickable
+                        color={reportScenarioMode === 'negative' ? 'warning' : 'default'}
+                        variant={reportScenarioMode === 'negative' ? 'filled' : 'outlined'}
+                        onClick={() => setReportScenarioMode('negative')}
+                      />
+                      <Chip
+                        size="small"
+                        label="Slowest"
+                        clickable
+                        color={reportScenarioMode === 'slow' ? 'error' : 'default'}
+                        variant={reportScenarioMode === 'slow' ? 'filled' : 'outlined'}
+                        onClick={() => setReportScenarioMode('slow')}
+                      />
+                    </div>
+                  </div>
+                  <div className="small">Mode: {reportScenarioMode} | rows: {reportScenarioSpotlight.length}</div>
+                  <div className="scenario-table-wrap">
+                    <table className="scenario-table">
+                      <thead>
+                        <tr>
+                          <th>verdict</th>
+                          <th>scenario</th>
+                          <th>test_type</th>
+                          <th>endpoint</th>
+                          <th>expected</th>
+                          <th>actual</th>
+                          <th>duration_ms</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportScenarioSpotlight.map((row) => {
+                          const scenarioInfo = humanizeScenarioName(row);
+                          return (
+                            <tr key={`${String(row?.name || 'scenario')}-${String(row?.endpoint_template || '')}`}>
+                              <td>{row?.passed ? 'pass' : 'fail'}</td>
+                              <td title={scenarioInfo.rawName || scenarioInfo.label}>
+                                <div>{scenarioInfo.label}</div>
+                                <div className="small">raw: {scenarioInfo.rawName || 'n/a'}</div>
+                              </td>
+                              <td>{String(row?.test_type || 'n/a')}</td>
+                              <td>{`${String(row?.method || '')} ${String(row?.endpoint_template || '')}`.trim()}</td>
+                              <td>{String(row?.expected_status ?? 'n/a')}</td>
+                              <td>{String(row?.actual_status ?? 'n/a')}</td>
+                              <td>{String(row?.duration_ms ?? 'n/a')}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-                <div className="report-metric">
-                  <span>RL Steps</span>
-                  <strong>{String(getField(trainingStats, ['rl_training_steps'], 'n/a'))}</strong>
-                </div>
-                <div className="report-metric">
-                  <span>RL Buffer</span>
-                  <strong>{String(getField(trainingStats, ['rl_buffer_size'], 'n/a'))}</strong>
-                </div>
-                <div className="report-metric">
-                  <span>Run Reward</span>
-                  <strong>{String(getField(learningFeedback, ['run_reward'], 'n/a'))}</strong>
-                </div>
-              </div>
+
+                <Tabs
+                  value={reportViewTab}
+                  onChange={(_, value) => setReportViewTab(value)}
+                  className="report-tabs"
+                  variant="scrollable"
+                  allowScrollButtonsMobile
+                >
+                  <Tab label={jobState === 'running' ? 'Overview (Live)' : 'Overview'} value="overview" />
+                  <Tab label="Quality" value="quality" />
+                  <Tab label="Trends" value="learning" />
+                  <Tab label="Raw" value="raw" />
+                </Tabs>
+
+                {reportViewTab === 'overview' && (
+                  <>
+                    <div className="report-grid">
+                      <div className="report-metric">
+                        <span>Total</span>
+                        <strong>{String(getField(reportSummary, ['total_scenarios'], 'n/a'))}</strong>
+                      </div>
+                      <div className="report-metric">
+                        <span>Pass Rate</span>
+                        <strong>{toPct(getField(reportSummary, ['pass_rate'], null))}</strong>
+                      </div>
+                      <div className="report-metric">
+                        <span>Quality Gate</span>
+                        <strong>{String(getField(reportSummary, ['meets_quality_gate'], 'n/a'))}</strong>
+                      </div>
+                      <div className="report-metric">
+                        <span>Failed</span>
+                        <strong>{String(getField(reportSummary, ['failed_scenarios'], 'n/a'))}</strong>
+                      </div>
+                      <div className="report-metric">
+                        <span>Flaky Ratio</span>
+                        <strong>{String(getField(reportSummary, ['flaky_ratio'], 'n/a'))}</strong>
+                      </div>
+                      <div className="report-metric">
+                        <span>Run Reward</span>
+                        <strong>{String(getField(learningFeedback, ['run_reward'], 'n/a'))}</strong>
+                      </div>
+                    </div>
+
+                    <div className="charts-grid">
+                      <BarListChart
+                        title="Domain Pass Rate Comparison"
+                        rows={domainPassRateRows}
+                        valueFormatter={(v) => `${(v * 100).toFixed(1)}%`}
+                        emptyText="Run more than one domain to compare."
+                      />
+                      <StackedPassFailChart
+                        title="Test Type Coverage (Pass/Fail)"
+                        rows={scenarioCoverageRows}
+                      />
+                      <BarListChart
+                        title="Stage Runtime (ms)"
+                        rows={stageMetricRows}
+                        valueFormatter={(v) => `${v.toFixed(1)} ms`}
+                        emptyText="No stage metrics available."
+                      />
+                      <BarListChart
+                        title="Failed Scenarios by Type"
+                        rows={failedByTypeRows}
+                        valueFormatter={(v) => String(Math.round(v))}
+                        emptyText="No failed test types."
+                      />
+                    </div>
+                  </>
+                )}
+
+                {reportViewTab === 'quality' && (
+                  <div className="charts-grid">
+                    <BarListChart
+                      title="Failure Taxonomy Breakdown"
+                      rows={failureTaxonomyRows}
+                      valueFormatter={(v) => String(Math.round(v))}
+                      emptyText="No taxonomy failures in this report."
+                    />
+                    <BarListChart
+                      title="Reward Breakdown Components"
+                      rows={rewardBreakdownRows}
+                      valueFormatter={(v) => v.toFixed(4)}
+                    />
+                  </div>
+                )}
+
+                {reportViewTab === 'learning' && (
+                  <>
+                    <div className="inline-actions">
+                      <label className="small">
+                        Trend Metric
+                      </label>
+                      <select value={trendMetric} onChange={(e) => setTrendMetric(e.target.value)}>
+                        <option value="run_reward">Run Reward</option>
+                        <option value="avg_decision_reward">Average Decision Reward</option>
+                      </select>
+                    </div>
+                    <div className="charts-grid">
+                      <TrendSpark
+                        title="Learning Trend by Run"
+                        points={trendRows}
+                        valueFormatter={(v) => v.toFixed(4)}
+                      />
+                      <div className="chart-card">
+                        <h3>Learning Snapshot</h3>
+                        <div className="report-grid">
+                          <div className="report-metric">
+                            <span>Model Steps</span>
+                            <strong>{String(getField(trainingStats, ['rl_training_steps'], 'n/a'))}</strong>
+                          </div>
+                          <div className="report-metric">
+                            <span>Buffer Size</span>
+                            <strong>{String(getField(trainingStats, ['rl_buffer_size'], 'n/a'))}</strong>
+                          </div>
+                          <div className="report-metric">
+                            <span>Rewarded</span>
+                            <strong>{String(getField(learningFeedback, ['rewarded_decisions'], 'n/a'))}</strong>
+                          </div>
+                          <div className="report-metric">
+                            <span>Penalized</span>
+                            <strong>{String(getField(learningFeedback, ['penalized_decisions'], 'n/a'))}</strong>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {reportViewTab === 'raw' && (
+                  <details className="advanced" open>
+                    <summary>Raw Report Payload</summary>
+                    <pre>{reportText}</pre>
+                  </details>
+                )}
+              </>
             )}
-            <details className="advanced">
-              <summary>Raw Report Payload</summary>
-              <pre>{reportText}</pre>
-            </details>
+            {!reportJson && (
+              <details className="advanced">
+                <summary>Raw Report Payload</summary>
+                <pre>{reportText}</pre>
+              </details>
+            )}
           </div>
 
           {showTechnical && (
@@ -2609,16 +3618,22 @@ export default function HomePage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {topDecisions.slice(0, 15).map((row) => (
-                          <tr key={String(row.name)}>
-                            <td>{row.name}</td>
-                            <td>{row.test_type}</td>
-                            <td>{row.selection_reason}</td>
-                            <td>{String(row.score ?? 'n/a')}</td>
-                            <td>{String(row.uncertainty ?? 'n/a')}</td>
-                            <td>{String(row.expected_reward ?? 'n/a')}</td>
-                          </tr>
-                        ))}
+                        {topDecisions.slice(0, 15).map((row) => {
+                          const scenarioInfo = humanizeScenarioName(row);
+                          return (
+                            <tr key={String(row.name)}>
+                              <td title={scenarioInfo.rawName || scenarioInfo.label}>
+                                <div>{scenarioInfo.label}</div>
+                                <div className="small">raw: {scenarioInfo.rawName || 'n/a'}</div>
+                              </td>
+                              <td>{row.test_type}</td>
+                              <td>{row.selection_reason}</td>
+                              <td>{String(row.score ?? 'n/a')}</td>
+                              <td>{String(row.uncertainty ?? 'n/a')}</td>
+                              <td>{String(row.expected_reward ?? 'n/a')}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

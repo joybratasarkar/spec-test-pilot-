@@ -20,7 +20,9 @@ import json
 import math
 import os
 import re
+import shlex
 import shutil
+import subprocess
 import time
 import uuid
 from copy import deepcopy
@@ -29,7 +31,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import parse_qsl, urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse
 
 import yaml
 from fastapi.testclient import TestClient
@@ -49,6 +51,7 @@ from spec_test_pilot.multi_language_tester import (
 
 
 PATH_PARAM_PATTERN = re.compile(r"\{([^}]+)\}")
+MISSING_PATH_PARAM_SENTINEL = "__qa_missing_path_param__"
 NEGATIVE_STATUS_CODES = {400, 401, 403, 404, 405, 409, 422}
 AUTH_NEGATIVE_STATUS_CODES = {401, 403}
 HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
@@ -76,6 +79,14 @@ RL_HISTORY_SEED_MIN_ATTEMPTS = 1
 RL_HISTORY_SEED_MIN_PRIORITY = 0.12
 RL_WEAK_MIN_ATTEMPTS = 3
 RL_WEAK_FAILURE_RATE_THRESHOLD = 0.20
+PORTFOLIO_STABLE_RATIO = 0.70
+PORTFOLIO_FOCUS_RATIO = 0.20
+PORTFOLIO_EXPLORE_RATIO = 0.10
+FORCED_REPLAY_CADENCE_RUNS = 2
+GAM_RECENT_FOCUS_WINDOW = 3
+GAM_RECENT_FOCUS_LIMIT = 40
+FLAKY_RERUN_MAX_ATTEMPTS = 3
+RUNTIME_REPAIR_SUGGESTION_LIMIT = 50
 SUPPORTED_SCRIPT_KINDS = {
     "python_pytest",
     "javascript_jest",
@@ -134,6 +145,10 @@ class DecisionLearningSignal:
     actual_status: Optional[int]
     corrected_expectation: bool = False
     contract_valid: Optional[bool] = None
+    display_name: str = ""
+    name_raw: str = ""
+    mutation_strategy: str = ""
+    history_seeded: bool = False
 
 
 @dataclass
@@ -153,6 +168,10 @@ class ScenarioExecutionResult:
     error: str = ""
     response_excerpt: str = ""
     verification: Dict[str, Any] = field(default_factory=dict)
+    display_name: str = ""
+    name_raw: str = ""
+    mutation_strategy: str = ""
+    history_seeded: bool = False
 
 
 class _ScriptResponseProxy:
@@ -305,6 +324,7 @@ class QASpecialistAgent:
         rl_checkpoint_path: Optional[str] = None,
         learning_state_path: Optional[str] = None,
         script_kind: str = DEFAULT_SCRIPT_KIND,
+        rl_train_mode: str = "periodic",
     ):
         _bootstrap_runtime_env()
         self.spec_path = str(spec_path)
@@ -336,6 +356,8 @@ class QASpecialistAgent:
                 + f"Supported: {', '.join(sorted(SUPPORTED_SCRIPT_KINDS))}"
             )
         self.script_kind = normalized_script_kind
+        normalized_rl_train_mode = str(rl_train_mode or os.getenv("RL_TRAIN_MODE", "periodic")).strip().lower()
+        self.rl_train_mode = "periodic" if normalized_rl_train_mode != "periodic" else normalized_rl_train_mode
 
         if output_dir:
             self.output_dir = Path(output_dir).resolve()
@@ -364,6 +386,7 @@ class QASpecialistAgent:
             checkpoint_path=self.rl_checkpoint_path,
             checkpoint_autosave=True,
             gam_writeback=False,
+            train_mode=self.rl_train_mode,
         )
         self.rl_trainer.register_agent("qa_specialist", self._qa_agent_feedback)
         self.learning_state = self._load_learning_state()
@@ -625,6 +648,10 @@ class QASpecialistAgent:
 
         stage_started = time.perf_counter()
         execution_results = self._execute_scenarios(spec, scenarios)
+        runtime_repair_ingest = self._ingest_runtime_repair_suggestions(
+            scenarios=scenarios,
+            results=execution_results,
+        )
         script_scenarios = list(scenarios)
         generated_files = self._generate_test_files(script_scenarios)
         generated_script_execution = self._execute_generated_script(spec, generated_files)
@@ -767,6 +794,7 @@ class QASpecialistAgent:
                     "llm_token_cap": self.llm_token_cap,
                 },
                 "script_kind": self.script_kind,
+                "rl_train_mode": self.rl_train_mode,
                 "llm_scenario_debug_log": self.llm_scenario_debug_log_path,
                 "llm_generation_degraded": bool(self._llm_generation_degraded),
                 "llm_generation_degraded_reason": str(
@@ -830,7 +858,15 @@ class QASpecialistAgent:
             "selection_decision_trace": self._last_selection_trace[:120],
             "mutation_policy": mutation_summary,
             "mutation_decision_trace": list(mutation_summary.get("applied_examples", []) or [])[:120],
-            "repair_policy": repair_summary,
+            "repair_policy": {
+                **repair_summary,
+                "runtime_suggestions_applied": int(
+                    runtime_repair_ingest.get("applied", 0)
+                ),
+                "runtime_suggestion_examples": runtime_repair_ingest.get(
+                    "examples", []
+                ),
+            },
             "scenario_source_breakdown": scenario_context.get("source_breakdown", {}),
             "weak_pattern_deltas": weak_pattern_deltas,
             "repro_artifacts": repro_artifacts,
@@ -1161,6 +1197,8 @@ class QASpecialistAgent:
                     data.setdefault("selection_summary", {})
                     data.setdefault("scenario_repair_rules", {})
                     data.setdefault("adaptive_policy", {})
+                    data.setdefault("gam_recent_focus_points", [])
+                    data.setdefault("replay_schedule", {})
                     data["scenario_stats"] = self._sanitize_loaded_scenario_stats(
                         data.get("scenario_stats", {})
                     )
@@ -1189,6 +1227,8 @@ class QASpecialistAgent:
             "selection_summary": {},
             "scenario_repair_rules": {},
             "adaptive_policy": {},
+            "gam_recent_focus_points": [],
+            "replay_schedule": {},
         }
 
     def _sanitize_loaded_scenario_stats(
@@ -1617,76 +1657,151 @@ class QASpecialistAgent:
         checks["openapi_spec_validation"] = dict(
             tooling_status.get("spec_validation", {}) or {}
         )
+
+        def _probe_command(cmd: List[str]) -> Dict[str, Any]:
+            try:
+                proc = subprocess.run(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=8,
+                    check=False,
+                )
+                return {
+                    "ok": bool(proc.returncode == 0),
+                    "exit_code": int(proc.returncode),
+                    "stdout": str(proc.stdout or "").strip()[:200],
+                    "stderr": str(proc.stderr or "").strip()[:200],
+                }
+            except Exception as exc:
+                return {"ok": False, "exit_code": -1, "stdout": "", "stderr": str(exc)}
+
         checks["hypothesis_shrinker"] = {
             "status": "active",
             "mode": "in_agent_greedy_shrinker",
             "notes": "Failed payload minimization runs in-agent for reproducible failures.",
         }
+        schemathesis_available = bool(packages.get("schemathesis", False))
+        schemathesis_probe = (
+            _probe_command(["schemathesis", "--version"])
+            if bool(shutil.which("schemathesis"))
+            else {"ok": schemathesis_available, "exit_code": 0 if schemathesis_available else -1}
+        )
         checks["schemathesis_stateful_smoke"] = {
-            "available": bool(packages.get("schemathesis", False)),
-            "status": "skipped" if not packages.get("schemathesis", False) else "ready",
+            "available": schemathesis_available,
+            "status": (
+                "skipped"
+                if not schemathesis_available
+                else ("active" if bool(schemathesis_probe.get("ok", False)) else "misconfigured")
+            ),
             "reason": (
                 "schemathesis_not_installed"
-                if not packages.get("schemathesis", False)
-                else "invoke via external CI adapter"
+                if not schemathesis_available
+                else (
+                    "cli_probe_failed"
+                    if not bool(schemathesis_probe.get("ok", False))
+                    else "stateful_smoke_cli_ready"
+                )
             ),
+            "probe": schemathesis_probe,
         }
+        restler_available = bool(binaries.get("restler", False))
+        restler_probe = _probe_command(["restler", "--help"]) if restler_available else {}
         checks["restler_sequence_seed"] = {
-            "available": bool(binaries.get("restler", False)),
-            "status": "skipped" if not binaries.get("restler", False) else "ready",
+            "available": restler_available,
+            "status": (
+                "skipped"
+                if not restler_available
+                else ("active" if bool(restler_probe.get("ok", False)) else "misconfigured")
+            ),
             "reason": (
                 "restler_cli_not_found"
-                if not binaries.get("restler", False)
-                else "invoke via nightly fuzzing pipeline"
+                if not restler_available
+                else (
+                    "restler_probe_failed"
+                    if not bool(restler_probe.get("ok", False))
+                    else "sequence_seed_cli_ready"
+                )
             ),
+            "probe": restler_probe,
         }
+        evomaster_available = bool(binaries.get("evomaster", False))
+        evomaster_probe = _probe_command(["evomaster", "--help"]) if evomaster_available else {}
         checks["evomaster_search_based"] = {
-            "available": bool(binaries.get("evomaster", False)),
-            "status": "skipped" if not binaries.get("evomaster", False) else "ready",
+            "available": evomaster_available,
+            "status": (
+                "skipped"
+                if not evomaster_available
+                else ("active" if bool(evomaster_probe.get("ok", False)) else "misconfigured")
+            ),
             "reason": (
                 "evomaster_cli_not_found"
-                if not binaries.get("evomaster", False)
-                else "invoke for deep nightly objective search"
+                if not evomaster_available
+                else (
+                    "evomaster_probe_failed"
+                    if not bool(evomaster_probe.get("ok", False))
+                    else "search_based_cli_ready"
+                )
             ),
+            "probe": evomaster_probe,
         }
         checks["pact_contract_check"] = {
             "available": bool(packages.get("pact", False)),
-            "status": "skipped" if not packages.get("pact", False) else "ready",
+            "status": "skipped" if not packages.get("pact", False) else "active",
             "reason": (
                 "pact_not_installed"
                 if not packages.get("pact", False)
-                else "ready_for_consumer_provider_contract_stage"
+                else "consumer_provider_contract_stage_enabled"
             ),
         }
+        zap_available = bool(binaries.get("zap_cli", False))
+        zap_probe = _probe_command(["zap-baseline.py", "-h"]) if zap_available else {}
         checks["zap_api_scan"] = {
-            "available": bool(binaries.get("zap_cli", False)),
-            "status": "skipped" if not binaries.get("zap_cli", False) else "ready",
-            "reason": (
-                "zap_cli_not_found"
-                if not binaries.get("zap_cli", False)
-                else "ready_for_security_scan_stage"
-            ),
-        }
-        checks["k6_load_probe"] = {
-            "available": bool(binaries.get("k6", False) or packages.get("locust", False)),
+            "available": zap_available,
             "status": (
                 "skipped"
-                if not (binaries.get("k6", False) or packages.get("locust", False))
-                else "ready"
+                if not zap_available
+                else ("active" if bool(zap_probe.get("ok", False)) else "misconfigured")
+            ),
+            "reason": (
+                "zap_cli_not_found"
+                if not zap_available
+                else (
+                    "zap_cli_probe_failed"
+                    if not bool(zap_probe.get("ok", False))
+                    else "security_scan_stage_enabled"
+                )
+            ),
+            "probe": zap_probe,
+        }
+        load_available = bool(binaries.get("k6", False) or packages.get("locust", False))
+        k6_probe = _probe_command(["k6", "version"]) if bool(binaries.get("k6", False)) else {}
+        checks["k6_load_probe"] = {
+            "available": load_available,
+            "status": (
+                "skipped"
+                if not load_available
+                else ("active" if (not k6_probe or bool(k6_probe.get("ok", False))) else "misconfigured")
             ),
             "reason": (
                 "k6_and_locust_not_available"
-                if not (binaries.get("k6", False) or packages.get("locust", False))
-                else "ready_for_perf_probe_stage"
+                if not load_available
+                else (
+                    "k6_probe_failed"
+                    if k6_probe and not bool(k6_probe.get("ok", False))
+                    else "perf_probe_stage_enabled"
+                )
             ),
+            "probe": k6_probe,
         }
         checks["testcontainers_isolation"] = {
             "available": bool(packages.get("testcontainers", False)),
-            "status": "skipped" if not packages.get("testcontainers", False) else "ready",
+            "status": "skipped" if not packages.get("testcontainers", False) else "active",
             "reason": (
                 "testcontainers_not_installed"
                 if not packages.get("testcontainers", False)
-                else "ready_for_real_dependency_isolation"
+                else "real_dependency_isolation_enabled"
             ),
         }
         return checks
@@ -1720,7 +1835,7 @@ class QASpecialistAgent:
         if not isinstance(checks, dict):
             return True
         quality = float(gam_context_pack.get("quality_score", 0.0) or 0.0)
-        required = ["has_weak_pattern", "has_trend_delta", "has_spec_risk", "has_next_action"]
+        required = ["has_weak_pattern_or_proxy", "has_trend_delta", "has_spec_risk", "has_next_action"]
         missing = [key for key in required if not bool(checks.get(key, False))]
         if quality < GAM_CONTEXT_MIN_QUALITY:
             return True
@@ -2421,6 +2536,7 @@ class QASpecialistAgent:
         return max(1, min(RL_MUTATION_MAX_VARIANTS_PER_TARGET, int(budget)))
 
     def _extract_rl_mutation_strategy(self, scenario: TestScenario) -> str:
+        saw_history_seed = False
         for item in list(scenario.assertions or []):
             value = str(item)
             if value.startswith("rl_mutation:"):
@@ -2428,8 +2544,76 @@ class QASpecialistAgent:
                 if strategy:
                     return strategy
             if value == "rl_history_seed":
-                return "history_seed"
-        return "unknown"
+                saw_history_seed = True
+        return "history_seed" if saw_history_seed else "unknown"
+
+    def _is_history_seeded_scenario(self, scenario: TestScenario) -> bool:
+        for item in list(scenario.assertions or []):
+            if str(item).strip() == "rl_history_seed":
+                return True
+        return False
+
+    def _humanize_mutation_strategy(self, strategy: str) -> str:
+        normalized = re.sub(r"[^a-z0-9_]+", "_", str(strategy or "").strip().lower())
+        normalized = re.sub(r"_+", "_", normalized).strip("_")
+        if not normalized:
+            return "scenario check"
+        if normalized == "missing_auth":
+            return "missing auth token"
+        if normalized == "invalid_auth":
+            return "invalid auth token"
+        if normalized == "query_fuzz":
+            return "unexpected query parameter payload"
+        if normalized == "path_not_found":
+            return "path not found"
+        if normalized == "adaptive_status_hypothesis":
+            return "nonexistent resource id check"
+        if normalized.startswith("missing_required_"):
+            field_name = normalized[len("missing_required_") :].replace("_", " ").strip()
+            return f"missing required field: {field_name or 'unknown'}"
+        if normalized.startswith("learned_missing_required_"):
+            field_name = normalized[len("learned_missing_required_") :].replace("_", " ").strip()
+            return f"missing required field: {field_name or 'unknown'}"
+        if normalized.startswith("learned_missing_"):
+            field_name = normalized[len("learned_missing_") :].replace("_", " ").strip()
+            return f"missing field: {field_name or 'unknown'}"
+        if normalized.startswith("missing_"):
+            field_name = normalized[len("missing_") :].replace("_", " ").strip()
+            return f"missing field: {field_name or 'unknown'}"
+        if normalized.startswith("learned_below_min_"):
+            field_name = normalized[len("learned_below_min_") :].replace("_", " ").strip()
+            return f"{field_name or 'value'} below minimum"
+        if normalized.startswith("below_min_"):
+            field_name = normalized[len("below_min_") :].replace("_", " ").strip()
+            return f"{field_name or 'value'} below minimum"
+        return normalized.replace("_", " ")
+
+    def _scenario_display_name(self, scenario: TestScenario) -> str:
+        method = str(getattr(scenario, "method", "") or "").upper().strip()
+        endpoint = str(getattr(scenario, "endpoint", "") or "").strip()
+        description = str(getattr(scenario, "description", "") or "").strip()
+        if description:
+            description = re.sub(r"\s*\[RL mutation:[^\]]+\]\s*$", "", description, flags=re.IGNORECASE).strip()
+        strategy = self._extract_rl_mutation_strategy(scenario)
+        history_seeded = self._is_history_seeded_scenario(scenario)
+
+        if strategy not in {"unknown", "history_seed"}:
+            intent = self._humanize_mutation_strategy(strategy)
+        elif description:
+            intent = description
+        elif history_seeded:
+            intent = "history seeded regression probe"
+        else:
+            intent = str(getattr(getattr(scenario, "test_type", None), "value", getattr(scenario, "test_type", "scenario"))).replace("_", " ")
+
+        intent = " ".join(intent.split()).strip() or "scenario check"
+        if intent and intent[0].islower():
+            intent = intent[0].upper() + intent[1:]
+
+        prefix = " ".join(part for part in [method, endpoint] if part).strip()
+        if prefix:
+            return f"{prefix} - {intent}"
+        return intent
 
     def _build_history_seed_scenarios(
         self,
@@ -2609,8 +2793,13 @@ class QASpecialistAgent:
             op_meta = {}
 
         response_statuses = op_meta.get("response_statuses", [])
+        is_auth_seed = test_type in {TestType.AUTHENTICATION, TestType.AUTHORIZATION}
         if isinstance(response_statuses, list) and response_statuses:
-            if expected_status not in response_statuses:
+            if is_auth_seed and int(expected_status) in AUTH_NEGATIVE_STATUS_CODES:
+                # Preserve auth-negative intent even when specs omit explicit 401/403
+                # so history-seeded auth checks don't drift to 2xx.
+                expected_status = 401 if int(expected_status) == 401 else 403
+            elif expected_status not in response_statuses:
                 preferred = [s for s in response_statuses if int(s) in NEGATIVE_STATUS_CODES]
                 if preferred and expected_status in NEGATIVE_STATUS_CODES:
                     expected_status = int(preferred[0])
@@ -2621,6 +2810,30 @@ class QASpecialistAgent:
             test_type=test_type.value,
             expected_status=int(expected_status),
         )
+
+        # Do not keep auth-negative expectations on non-auth history-seeded probes.
+        # Those variants frequently carry boundary/input intent and should target
+        # validation/not-found behavior instead of token semantics.
+        if (
+            test_type in {TestType.BOUNDARY_TESTING, TestType.INPUT_VALIDATION}
+            and int(expected_status) in AUTH_NEGATIVE_STATUS_CODES
+        ):
+            fallback_status = 404
+            if isinstance(response_statuses, list):
+                non_auth_negative = [
+                    int(status)
+                    for status in response_statuses
+                    if int(status) in NEGATIVE_STATUS_CODES
+                    and int(status) not in AUTH_NEGATIVE_STATUS_CODES
+                ]
+                if non_auth_negative:
+                    fallback_status = int(non_auth_negative[0])
+                elif 404 not in response_statuses:
+                    fallback_status = 400
+            expected_status = self._normalize_expected_status_for_test_type(
+                test_type=test_type.value,
+                expected_status=int(fallback_status),
+            )
 
         has_body = bool(target.get("has_body", False))
         has_params = bool(target.get("has_params", False))
@@ -2638,6 +2851,16 @@ class QASpecialistAgent:
                     )
             elif not params:
                 params["q"] = self._sample_query_value("q", expected_status)
+
+        request_schema = op_meta.get("request_schema", {})
+        if (
+            method in {"POST", "PUT", "PATCH"}
+            and not has_body
+            and 200 <= int(expected_status) < 300
+            and isinstance(request_schema, dict)
+            and bool(request_schema)
+        ):
+            has_body = True
 
         body: Optional[Dict[str, Any]] = None
         if method in {"POST", "PUT", "PATCH"} and has_body:
@@ -2819,12 +3042,12 @@ class QASpecialistAgent:
         if base_status == 405:
             return target_status == 405
 
-        scenario_type = str(getattr(scenario.test_type, "value", scenario.test_type)).lower()
-        if scenario_type in {"integration", "error_handling", "input_validation", "boundary_testing"}:
-            base_is_negative = base_status in NEGATIVE_STATUS_CODES
-            target_is_negative = target_status in NEGATIVE_STATUS_CODES
-            if base_is_negative != target_is_negative:
-                return False
+        base_is_negative = base_status in NEGATIVE_STATUS_CODES
+        target_is_negative = target_status in NEGATIVE_STATUS_CODES
+        # Keep adaptive hypotheses within the same polarity to avoid
+        # contradictory variants (e.g. happy-path 201 -> adaptive 400).
+        if base_is_negative != target_is_negative:
+            return False
 
         return True
 
@@ -2858,6 +3081,11 @@ class QASpecialistAgent:
             for item in (op_meta.get("required_fields", []) or [])
             if str(item).strip()
         ]
+        path_safe_params = self._coerce_valid_path_params(
+            endpoint=endpoint,
+            params=dict(scenario.params or {}),
+            op_meta=op_meta,
+        )
         op_failure_rate = float(ctx.get("op_failure_rate", 0.0))
         failure_rate = float(ctx.get("failure_rate", 0.0))
         uncertainty = float(ctx.get("uncertainty", 0.0))
@@ -2927,7 +3155,7 @@ class QASpecialistAgent:
                 )
 
         if method in {"POST", "PUT", "PATCH"} and not base_is_auth_negative:
-            empty_body_params = dict(scenario.params or {})
+            empty_body_params = dict(path_safe_params)
             enqueue(
                 0.90 + risk_boost,
                 self._make_mutation_scenario(
@@ -2940,7 +3168,7 @@ class QASpecialistAgent:
                     expected_status=400,
                 )
             )
-            type_fuzz_params = dict(scenario.params or {})
+            type_fuzz_params = dict(path_safe_params)
             enqueue(
                 0.88 + risk_boost,
                 self._make_mutation_scenario(
@@ -2964,7 +3192,7 @@ class QASpecialistAgent:
                     )
                 missing_field = required_fields[0]
                 body_seed.pop(str(missing_field), None)
-                req_params = dict(scenario.params or {})
+                req_params = dict(path_safe_params)
                 field_slug = re.sub(r"[^a-z0-9]+", "_", str(missing_field).lower()).strip("_")
                 if not field_slug:
                     field_slug = "field"
@@ -2982,7 +3210,7 @@ class QASpecialistAgent:
                 )
 
         if method == "GET" and not base_is_auth_negative and not base_is_method_not_allowed:
-            params = dict(scenario.params or {})
+            params = dict(path_safe_params)
             query_key_candidates = [
                 str(name)
                 for name in query_names
@@ -3029,7 +3257,7 @@ class QASpecialistAgent:
                     missing_auth_headers = dict(scenario.headers or {})
                     missing_auth_headers.pop("Authorization", None)
                     missing_auth_headers.pop("authorization", None)
-                    missing_auth_params = dict(scenario.params or {})
+                    missing_auth_params = dict(path_safe_params)
                     enqueue(
                         0.93 + risk_boost,
                         self._make_mutation_scenario(
@@ -3046,7 +3274,7 @@ class QASpecialistAgent:
                     invalid_headers = dict(scenario.headers or {})
                     invalid_headers["Authorization"] = "Bearer invalid"
                     invalid_headers.pop("authorization", None)
-                    invalid_params = dict(scenario.params or {})
+                    invalid_params = dict(path_safe_params)
                     enqueue(
                         0.91 + risk_boost,
                         self._make_mutation_scenario(
@@ -3063,7 +3291,7 @@ class QASpecialistAgent:
                 headers = dict(scenario.headers or {})
                 headers["Authorization"] = "Bearer invalid"
                 headers.pop("authorization", None)
-                auth_params = dict(scenario.params or {})
+                auth_params = dict(path_safe_params)
                 enqueue(
                     0.87 + risk_boost,
                     self._make_mutation_scenario(
@@ -3080,7 +3308,7 @@ class QASpecialistAgent:
                     missing_auth_headers = dict(scenario.headers or {})
                     missing_auth_headers.pop("Authorization", None)
                     missing_auth_headers.pop("authorization", None)
-                    missing_auth_params = dict(scenario.params or {})
+                    missing_auth_params = dict(path_safe_params)
                     enqueue(
                         0.92 + risk_boost,
                         self._make_mutation_scenario(
@@ -3212,7 +3440,11 @@ class QASpecialistAgent:
         if not properties and not required_fields:
             return []
 
-        base_params = dict(scenario.params or {})
+        base_params = self._coerce_valid_path_params(
+            endpoint=str(scenario.endpoint),
+            params=dict(scenario.params or {}),
+            op_meta=operation_meta if isinstance(operation_meta, dict) else {},
+        )
         proposals: List[Dict[str, Any]] = []
         failure_rate = float(target_context.get("failure_rate", 0.0))
         uncertainty = float(target_context.get("uncertainty", 0.0))
@@ -3369,6 +3601,44 @@ class QASpecialistAgent:
         output.sort(key=lambda item: float(item.get("weight", 0.0)), reverse=True)
         return output[:6]
 
+    def _coerce_valid_path_params(
+        self,
+        *,
+        endpoint: str,
+        params: Dict[str, Any],
+        op_meta: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        normalized = dict(params or {})
+        placeholders = [
+            str(item).strip()
+            for item in PATH_PARAM_PATTERN.findall(str(endpoint or ""))
+            if str(item).strip()
+        ]
+        if not placeholders:
+            return normalized
+        path_param_schemas = (
+            op_meta.get("path_param_schemas", {})
+            if isinstance(op_meta.get("path_param_schemas", {}), dict)
+            else {}
+        )
+        for name in placeholders:
+            raw_value = normalized.get(name)
+            raw_text = str(raw_value).strip() if raw_value is not None else ""
+            lower_value = raw_text.lower()
+            invalid_hint = (
+                raw_value is None
+                or raw_text == ""
+                or raw_text == MISSING_PATH_PARAM_SENTINEL
+                or any(token in lower_value for token in ("nonexistent", "notfound", "missing", "invalid"))
+                or bool(re.fullmatch(r"9{3,}", raw_text))
+            )
+            if invalid_hint:
+                normalized[name] = self._default_path_param_value(
+                    name,
+                    path_param_schemas.get(name, {}),
+                )
+        return normalized
+
     def _make_mutation_scenario(
         self,
         base: TestScenario,
@@ -3466,6 +3736,91 @@ class QASpecialistAgent:
             seen_names.add(str(scenario.name))
             deduped.append(scenario)
         return deduped
+
+    def _portfolio_target_counts(self, budget: int) -> Dict[str, int]:
+        total = max(0, int(budget))
+        if total <= 0:
+            return {"stable": 0, "focus": 0, "explore": 0}
+        stable = int(math.floor(total * PORTFOLIO_STABLE_RATIO))
+        focus = int(math.floor(total * PORTFOLIO_FOCUS_RATIO))
+        explore = int(math.floor(total * PORTFOLIO_EXPLORE_RATIO))
+        assigned = stable + focus + explore
+        remainder = total - assigned
+        # Prefer extra slots for stable first, then focus.
+        for bucket in ("stable", "focus", "explore"):
+            if remainder <= 0:
+                break
+            if bucket == "stable":
+                stable += 1
+            elif bucket == "focus":
+                focus += 1
+            else:
+                explore += 1
+            remainder -= 1
+        return {"stable": stable, "focus": focus, "explore": explore}
+
+    def _candidate_portfolio_bucket(
+        self,
+        *,
+        candidate: Dict[str, Any],
+        known_patterns: Dict[str, Any],
+        uncertainty_threshold: float,
+    ) -> str:
+        fingerprint = str(candidate.get("fingerprint", ""))
+        attempts = int(candidate.get("historical_attempts", 0))
+        failure_rate = float(candidate.get("historical_failure_rate", 0.0))
+        avg_reward = float(candidate.get("historical_avg_reward", 0.0))
+        uncertainty = float(candidate.get("score_parts", {}).get("uncertainty", 0.0))
+        novelty_bonus = float(candidate.get("novelty_bonus", 0.0))
+
+        if novelty_bonus > 0.0 or uncertainty >= max(0.0001, float(uncertainty_threshold)):
+            return "explore"
+        if (
+            fingerprint in known_patterns
+            and attempts >= RL_WEAK_MIN_ATTEMPTS
+            and (failure_rate >= RL_WEAK_FAILURE_RATE_THRESHOLD or avg_reward < 0.25)
+        ):
+            return "focus"
+        return "stable"
+
+    def _normalize_focus_key(self, text: str) -> str:
+        cleaned = re.sub(r"\s+", " ", str(text or "").strip().lower())
+        return cleaned[:240]
+
+    def _get_recent_gam_focus_keys(self) -> List[str]:
+        raw = self.learning_state.get("gam_recent_focus_points", [])
+        if not isinstance(raw, list):
+            return []
+        keys = [self._normalize_focus_key(str(item)) for item in raw if str(item).strip()]
+        if len(keys) > GAM_RECENT_FOCUS_LIMIT:
+            keys = keys[-GAM_RECENT_FOCUS_LIMIT:]
+        return keys
+
+    def _remember_gam_focus_points(self, focus_points: List[str]) -> None:
+        prior = self._get_recent_gam_focus_keys()
+        additions = [self._normalize_focus_key(item) for item in (focus_points or []) if str(item).strip()]
+        combined = (prior + additions)[-GAM_RECENT_FOCUS_LIMIT:]
+        self.learning_state["gam_recent_focus_points"] = combined
+
+    def _build_spec_signature_focus_point(self) -> str:
+        op_index = self._operation_index if isinstance(self._operation_index, dict) else {}
+        if not op_index:
+            return ""
+        operations = len(op_index)
+        auth_required = sum(1 for meta in op_index.values() if bool((meta or {}).get("auth_required", False)))
+        with_path_params = sum(
+            1 for meta in op_index.values() if bool((meta or {}).get("path_param_names", []))
+        )
+        write_ops = sum(
+            1
+            for key in op_index.keys()
+            if str(key).split(" ", 1)[0] in {"POST", "PUT", "PATCH", "DELETE"}
+        )
+        return (
+            "Spec signature: "
+            f"ops={operations}, auth_required={auth_required}, write_ops={write_ops}, "
+            f"path_param_ops={with_path_params}. Prioritize scenarios reflecting this shape."
+        )
 
     def _select_scenarios_with_learning(self, scenarios: List[TestScenario]) -> List[TestScenario]:
         if not scenarios:
@@ -3667,6 +4022,11 @@ class QASpecialistAgent:
                 scenario = chosen["scenario"]
                 selected.append(scenario)
                 selected_fingerprints.add(fp)
+                replay_schedule = self.learning_state.setdefault("replay_schedule", {})
+                if isinstance(replay_schedule, dict):
+                    replay_schedule[str(target.get("fingerprint", fp))] = int(
+                        self.learning_state.get("run_count", 0)
+                    )
                 endpoint_counter[chosen["endpoint_key"]] += 1
                 type_counter[chosen["type_key"]] += 1
                 if len(selection_trace) < SELECTION_TRACE_LIMIT:
@@ -3690,69 +4050,6 @@ class QASpecialistAgent:
                     )
                 candidates = [item for item in candidates if item["fingerprint"] != fp]
 
-        run_count = int(self.learning_state.get("run_count", 0))
-        novel_selected_count = int(
-            sum(1 for fp in selected_fingerprints if fp not in known_patterns)
-        )
-        novel_candidates = [
-            item
-            for item in candidates
-            if str(item.get("fingerprint", "")) not in known_patterns
-        ]
-        novelty_target = 0
-        if run_count >= 3 and self.max_scenarios >= 8 and novel_candidates:
-            novelty_target = max(1, min(4, int(math.ceil(float(self.max_scenarios) * 0.25))))
-            novelty_target = min(
-                int(novelty_target),
-                int(novel_selected_count + len(novel_candidates)),
-            )
-        if novelty_target > novel_selected_count and novel_candidates:
-            ranked_novel = sorted(
-                novel_candidates,
-                key=lambda item: (
-                    float(item["score_parts"].get("score", 0.0)),
-                    float(item["score_parts"].get("uncertainty", 0.0)),
-                ),
-                reverse=True,
-            )
-            for chosen in ranked_novel:
-                if novel_selected_count >= novelty_target:
-                    break
-                if len(selected) >= int(self.max_scenarios):
-                    break
-                fp = str(chosen["fingerprint"])
-                if fp in selected_fingerprints:
-                    continue
-                scenario = chosen["scenario"]
-                selected.append(scenario)
-                selected_fingerprints.add(fp)
-                novel_selected_count += 1
-                endpoint_counter[chosen["endpoint_key"]] += 1
-                type_counter[chosen["type_key"]] += 1
-                if len(selection_trace) < SELECTION_TRACE_LIMIT:
-                    parts = chosen["score_parts"]
-                    selection_trace.append(
-                        {
-                            "name": scenario.name,
-                            "test_type": chosen["type_key"],
-                            "endpoint": chosen["endpoint_key"],
-                            "fingerprint": fp,
-                            "selection_reason": "novelty_quota",
-                            "score": round(float(parts["score"]), 4),
-                            "expected_reward": round(float(parts["expected_reward"]), 4),
-                            "uncertainty": round(float(parts["uncertainty"]), 4),
-                            "exploration_bonus": round(float(parts["exploration_bonus"]), 4),
-                            "failure_focus_bonus": round(float(parts["failure_focus_bonus"]), 4),
-                            "historical_reward": round(float(parts["historical_reward"]), 4),
-                            "novelty_bonus": round(float(chosen["novelty_bonus"]), 4),
-                            "diversity_penalty": 0.0,
-                        }
-                    )
-            if selected_fingerprints:
-                candidates = [
-                    item for item in candidates if item["fingerprint"] not in selected_fingerprints
-                ]
-
         uncertainty_values = [
             float(item["score_parts"].get("uncertainty", 0.0)) for item in candidates
         ]
@@ -3769,8 +4066,8 @@ class QASpecialistAgent:
                 or float(item.get("historical_avg_reward", 0.0)) < 0.55
             )
         ]
-        effective_budget = max(self.max_scenarios, len(uncertain_candidates), len(selected))
-        budget_expanded = effective_budget > self.max_scenarios
+        effective_budget = max(int(self.max_scenarios), len(uncertain_candidates), len(selected))
+        budget_expanded = effective_budget > int(self.max_scenarios)
 
         if uncertain_candidates:
             uncertain_sorted = sorted(
@@ -3784,7 +4081,7 @@ class QASpecialistAgent:
             for chosen in uncertain_sorted:
                 if len(selected) >= int(effective_budget):
                     break
-                fp = chosen["fingerprint"]
+                fp = str(chosen["fingerprint"])
                 if fp in selected_fingerprints:
                     continue
                 scenario = chosen["scenario"]
@@ -3811,17 +4108,79 @@ class QASpecialistAgent:
                             "diversity_penalty": 0.0,
                         }
                     )
+            if selected_fingerprints:
+                candidates = [
+                    item for item in candidates if item["fingerprint"] not in selected_fingerprints
+                ]
 
-        if selected_fingerprints:
-            candidates = [
-                item for item in candidates if item["fingerprint"] not in selected_fingerprints
-            ]
+        remaining_budget = max(0, int(effective_budget - len(selected)))
+        portfolio_targets = self._portfolio_target_counts(remaining_budget)
+        bucket_counts = {"stable": 0, "focus": 0, "explore": 0}
 
-        while candidates and len(selected) < effective_budget:
+        def _select_from_bucket(bucket: str, selection_reason: str) -> None:
+            nonlocal candidates
+            target = int(portfolio_targets.get(bucket, 0))
+            if target <= 0:
+                return
+            while bucket_counts[bucket] < target and len(selected) < int(effective_budget):
+                pool = [
+                    item
+                    for item in candidates
+                    if item["fingerprint"] not in selected_fingerprints
+                    and self._candidate_portfolio_bucket(
+                        candidate=item,
+                        known_patterns=known_patterns,
+                        uncertainty_threshold=uncertainty_threshold,
+                    )
+                    == bucket
+                ]
+                if not pool:
+                    break
+                chosen = max(
+                    pool,
+                    key=lambda item: (
+                        float(item["score_parts"].get("score", 0.0)),
+                        float(item["score_parts"].get("uncertainty", 0.0)),
+                    ),
+                )
+                fp = str(chosen["fingerprint"])
+                scenario = chosen["scenario"]
+                selected.append(scenario)
+                selected_fingerprints.add(fp)
+                bucket_counts[bucket] += 1
+                endpoint_counter[chosen["endpoint_key"]] += 1
+                type_counter[chosen["type_key"]] += 1
+                if len(selection_trace) < SELECTION_TRACE_LIMIT:
+                    parts = chosen["score_parts"]
+                    selection_trace.append(
+                        {
+                            "name": scenario.name,
+                            "test_type": chosen["type_key"],
+                            "endpoint": chosen["endpoint_key"],
+                            "fingerprint": fp,
+                            "selection_reason": selection_reason,
+                            "score": round(float(parts["score"]), 4),
+                            "expected_reward": round(float(parts["expected_reward"]), 4),
+                            "uncertainty": round(float(parts["uncertainty"]), 4),
+                            "exploration_bonus": round(float(parts["exploration_bonus"]), 4),
+                            "failure_focus_bonus": round(float(parts["failure_focus_bonus"]), 4),
+                            "historical_reward": round(float(parts["historical_reward"]), 4),
+                            "novelty_bonus": round(float(chosen["novelty_bonus"]), 4),
+                            "diversity_penalty": 0.0,
+                        }
+                    )
+                candidates = [item for item in candidates if item["fingerprint"] != fp]
+
+        _select_from_bucket("focus", "focus_quota")
+        _select_from_bucket("explore", "explore_quota")
+        _select_from_bucket("stable", "stable_quota")
+
+        # Fill any leftover slots with score-ranked diversity-aware selection.
+        while candidates and len(selected) < int(effective_budget):
             best_idx = 0
             best_score = -float("inf")
             best_diversity_penalty = 0.0
-
+            best_bucket = "stable"
             for idx, item in enumerate(candidates):
                 endpoint_penalty = 0.09 * endpoint_counter[item["endpoint_key"]]
                 type_penalty = 0.05 * type_counter[item["type_key"]]
@@ -3834,14 +4193,19 @@ class QASpecialistAgent:
                     best_score = total_score
                     best_idx = idx
                     best_diversity_penalty = diversity_penalty
+                    best_bucket = self._candidate_portfolio_bucket(
+                        candidate=item,
+                        known_patterns=known_patterns,
+                        uncertainty_threshold=uncertainty_threshold,
+                    )
 
             chosen = candidates.pop(best_idx)
             scenario = chosen["scenario"]
             selected.append(scenario)
             selected_fingerprints.add(chosen["fingerprint"])
+            bucket_counts[best_bucket] = int(bucket_counts.get(best_bucket, 0)) + 1
             endpoint_counter[chosen["endpoint_key"]] += 1
             type_counter[chosen["type_key"]] += 1
-
             if len(selection_trace) < SELECTION_TRACE_LIMIT:
                 parts = chosen["score_parts"]
                 selection_trace.append(
@@ -3862,9 +4226,28 @@ class QASpecialistAgent:
                     }
                 )
 
+        run_count = int(self.learning_state.get("run_count", 0))
+        novelty_target = 0
+        if run_count >= 3 and self.max_scenarios >= 8:
+            novelty_target = max(1, min(4, int(math.ceil(float(self.max_scenarios) * 0.25))))
+
         final_novel_selected_count = int(
             sum(1 for fp in selected_fingerprints if fp not in known_patterns)
         )
+        scenario_by_name = {
+            str(getattr(item, "name", "") or ""): item for item in scenarios
+        }
+        for trace_item in selection_trace:
+            if not isinstance(trace_item, dict):
+                continue
+            name_key = str(trace_item.get("name", "") or "")
+            scenario = scenario_by_name.get(name_key)
+            if scenario is None:
+                continue
+            trace_item["display_name"] = self._scenario_display_name(scenario)
+            trace_item["name_raw"] = str(getattr(scenario, "name", name_key))
+            trace_item["mutation_strategy"] = self._extract_rl_mutation_strategy(scenario)
+            trace_item["history_seeded"] = bool(self._is_history_seeded_scenario(scenario))
         self._last_selection_trace = selection_trace
         self._last_selection_summary = {
             "base_max_scenarios": int(self.max_scenarios),
@@ -3882,6 +4265,13 @@ class QASpecialistAgent:
             ),
             "novelty_target": int(novelty_target),
             "novel_selected_count": int(final_novel_selected_count),
+            "portfolio_policy": {
+                "stable_ratio": PORTFOLIO_STABLE_RATIO,
+                "focus_ratio": PORTFOLIO_FOCUS_RATIO,
+                "explore_ratio": PORTFOLIO_EXPLORE_RATIO,
+                "targets": {k: int(v) for k, v in portfolio_targets.items()},
+                "selected": {k: int(v) for k, v in bucket_counts.items()},
+            },
         }
         self.learning_state["selection_trace"] = list(selection_trace)
         self.learning_state["selection_summary"] = dict(self._last_selection_summary)
@@ -3896,6 +4286,11 @@ class QASpecialistAgent:
         if not scenario_stats:
             return []
 
+        replay_schedule = self.learning_state.get("replay_schedule", {})
+        if not isinstance(replay_schedule, dict):
+            replay_schedule = {}
+        current_run = int(self.learning_state.get("run_count", 0))
+
         ranked: List[Dict[str, Any]] = []
         for fingerprint, stats_raw in scenario_stats.items():
             if not isinstance(stats_raw, dict):
@@ -3904,6 +4299,9 @@ class QASpecialistAgent:
             failure_rate = float(stats_raw.get("failure_rate", 0.0))
             avg_reward = float(stats_raw.get("avg_reward", 0.0))
             if attempts < 3 or failure_rate < 0.75:
+                continue
+            last_replay_run = int(replay_schedule.get(str(fingerprint), -FORCED_REPLAY_CADENCE_RUNS))
+            if (current_run - last_replay_run) < FORCED_REPLAY_CADENCE_RUNS:
                 continue
 
             parsed = self._parse_scenario_fingerprint(str(fingerprint))
@@ -3930,6 +4328,7 @@ class QASpecialistAgent:
 
             ranked.append(
                 {
+                    "fingerprint": str(fingerprint),
                     "method": canonical_method,
                     "endpoint": canonical_endpoint,
                     "test_type": str(canonical.get("test_type", test_type)),
@@ -4150,6 +4549,10 @@ class QASpecialistAgent:
                     actual_status=result.actual_status,
                     corrected_expectation=corrected_expectation,
                     contract_valid=contract_valid,
+                    display_name=self._scenario_display_name(scenario),
+                    name_raw=str(scenario.name),
+                    mutation_strategy=self._extract_rl_mutation_strategy(scenario),
+                    history_seeded=self._is_history_seeded_scenario(scenario),
                 )
             )
 
@@ -4279,6 +4682,7 @@ class QASpecialistAgent:
                     "expected_status": expected_status,
                     "actual_status_counts": {},
                     "spec_scope": str(self._spec_scope_key or "").strip() or None,
+                    "maturity_level": "L1",
                 },
             )
             attempts = int(stats.get("attempts", 0)) + 1
@@ -4301,6 +4705,14 @@ class QASpecialistAgent:
             actual_key = str(signal.get("actual_status"))
             actual_counts = stats.setdefault("actual_status_counts", {})
             actual_counts[actual_key] = int(actual_counts.get(actual_key, 0)) + 1
+            # Mimic gradual junior-engineer progression by promoting maturity
+            # only after enough repetitions with improving reliability.
+            maturity = "L1"
+            if attempts >= 12 and failures <= max(1, int(attempts * 0.15)):
+                maturity = "L3"
+            elif attempts >= 6 and failures <= max(1, int(attempts * 0.30)):
+                maturity = "L2"
+            stats["maturity_level"] = maturity
 
             self.adaptive_policy.observe(
                 test_type=test_type,
@@ -4337,6 +4749,13 @@ class QASpecialistAgent:
                 reverse=True,
             )[:SCENARIO_STATS_LIMIT]
             self.learning_state["scenario_stats"] = {k: v for k, v in ranked}
+
+        replay_schedule = self.learning_state.setdefault("replay_schedule", {})
+        if isinstance(replay_schedule, dict):
+            valid_keys = set(str(k) for k in self.learning_state["scenario_stats"].keys())
+            stale = [str(k) for k in replay_schedule.keys() if str(k) not in valid_keys]
+            for key in stale:
+                replay_schedule.pop(key, None)
 
         self._refresh_scenario_repair_rules()
         self.adaptive_policy.scenario_stats = dict(self.learning_state["scenario_stats"])
@@ -4604,16 +5023,12 @@ class QASpecialistAgent:
                             response_statuses.append(int(code_text))
                         response_payload = self._resolve_refs(spec, response_meta)
                         if isinstance(response_payload, dict):
-                            content = response_payload.get("content", {})
-                            if isinstance(content, dict):
-                                json_schema = (
-                                    (content.get("application/json") or {}).get("schema", {})
-                                )
-                                if isinstance(json_schema, dict) and json_schema:
-                                    response_schemas[code_text] = self._resolve_refs(
-                                        spec,
-                                        json_schema,
-                                    )
+                            extracted_schema = self._extract_response_schema_from_response_payload(
+                                spec=spec,
+                                response_payload=response_payload,
+                            )
+                            if isinstance(extracted_schema, dict) and extracted_schema:
+                                response_schemas[code_text] = extracted_schema
 
                 raw_operation_params = self._resolve_refs(
                     spec,
@@ -4652,6 +5067,70 @@ class QASpecialistAgent:
                     "auth_required": bool(self._operation_key(str(method).upper(), path) in self._auth_required_ops),
                 }
         return index
+
+    def _extract_response_schema_from_response_payload(
+        self, *, spec: Dict[str, Any], response_payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        content = response_payload.get("content", {})
+        if not isinstance(content, dict):
+            return {}
+
+        for media_type, media_value in content.items():
+            media_key = str(media_type).lower()
+            if "json" not in media_key:
+                continue
+            media_obj = self._resolve_refs(
+                spec,
+                media_value if isinstance(media_value, dict) else {},
+            )
+            if not isinstance(media_obj, dict):
+                continue
+
+            schema = self._resolve_refs(spec, media_obj.get("schema", {}))
+            if isinstance(schema, dict) and schema:
+                return schema
+
+            example = media_obj.get("example")
+            if example is not None:
+                return self._derive_schema_from_example(example)
+            examples = media_obj.get("examples", {})
+            if isinstance(examples, dict) and examples:
+                for item in examples.values():
+                    example_obj = self._resolve_refs(
+                        spec,
+                        item if isinstance(item, dict) else {},
+                    )
+                    if not isinstance(example_obj, dict):
+                        continue
+                    if "value" in example_obj:
+                        return self._derive_schema_from_example(example_obj.get("value"))
+        return {}
+
+    def _derive_schema_from_example(self, value: Any) -> Dict[str, Any]:
+        if isinstance(value, bool):
+            return {"type": "boolean"}
+        if isinstance(value, int) and not isinstance(value, bool):
+            return {"type": "integer"}
+        if isinstance(value, float):
+            return {"type": "number"}
+        if isinstance(value, str):
+            return {"type": "string"}
+        if isinstance(value, list):
+            if value:
+                return {"type": "array", "items": self._derive_schema_from_example(value[0])}
+            return {"type": "array"}
+        if isinstance(value, dict):
+            properties: Dict[str, Any] = {}
+            required: List[str] = []
+            for key, item in value.items():
+                key_text = str(key)
+                required.append(key_text)
+                properties[key_text] = self._derive_schema_from_example(item)
+            result: Dict[str, Any] = {"type": "object", "properties": properties}
+            if required:
+                result["required"] = required
+            return result
+        return {"type": "string"}
 
     def _extract_request_schema(self, spec: Dict[str, Any], operation: Dict[str, Any]) -> Dict[str, Any]:
         request_body = self._resolve_refs(spec, operation.get("requestBody", {}))
@@ -5102,9 +5581,14 @@ class QASpecialistAgent:
             selected_rows.append(
                 {
                     "name": scenario.name,
+                    "display_name": self._scenario_display_name(scenario),
+                    "name_raw": str(scenario.name),
                     "fingerprint": fingerprint,
                     "source": str(source_info.get("source", "llm_base")),
-                    "mutation_strategy": str(source_info.get("strategy", "")),
+                    "mutation_strategy": str(
+                        source_info.get("strategy", "") or self._extract_rl_mutation_strategy(scenario)
+                    ),
+                    "history_seeded": bool(self._is_history_seeded_scenario(scenario)),
                     "method": str(scenario.method).upper(),
                     "endpoint": str(scenario.endpoint),
                     "test_type": str(scenario.test_type.value),
@@ -5180,6 +5664,9 @@ class QASpecialistAgent:
         )
 
     def _runtime_cap_result(self, scenario: TestScenario) -> ScenarioExecutionResult:
+        display_name = self._scenario_display_name(scenario)
+        mutation_strategy = self._extract_rl_mutation_strategy(scenario)
+        history_seeded = self._is_history_seeded_scenario(scenario)
         return ScenarioExecutionResult(
             name=str(scenario.name),
             test_type=str(scenario.test_type.value),
@@ -5214,9 +5701,16 @@ class QASpecialistAgent:
                     "issues": [f"runtime_cap_exceeded_{self.max_runtime_sec}s"],
                 },
             },
+            display_name=display_name,
+            name_raw=str(scenario.name),
+            mutation_strategy=str(mutation_strategy),
+            history_seeded=bool(history_seeded),
         )
 
     def _unsafe_action_result(self, scenario: TestScenario) -> ScenarioExecutionResult:
+        display_name = self._scenario_display_name(scenario)
+        mutation_strategy = self._extract_rl_mutation_strategy(scenario)
+        history_seeded = self._is_history_seeded_scenario(scenario)
         return ScenarioExecutionResult(
             name=str(scenario.name),
             test_type=str(scenario.test_type.value),
@@ -5251,6 +5745,10 @@ class QASpecialistAgent:
                     "issues": [f"unsafe_action_blocked_{self.environment_profile}"],
                 },
             },
+            display_name=display_name,
+            name_raw=str(scenario.name),
+            mutation_strategy=str(mutation_strategy),
+            history_seeded=bool(history_seeded),
         )
 
     def _is_safe_method_for_profile(self, method: str) -> bool:
@@ -5302,7 +5800,13 @@ class QASpecialistAgent:
                         self._runtime_skipped_count += 1
                         results.append(self._runtime_cap_result(scenario))
                         continue
-                results.append(self._execute_one_scenario(adapter, scenario))
+                result = self._execute_one_scenario(adapter, scenario)
+                result = self._apply_failure_triage_and_rerun(
+                    client=adapter,
+                    scenario=scenario,
+                    result=result,
+                )
+                results.append(result)
 
         return results
 
@@ -5323,8 +5827,197 @@ class QASpecialistAgent:
                 if not self._is_safe_method_for_profile(str(scenario.method)):
                     results.append(self._unsafe_action_result(scenario))
                     continue
-                results.append(self._execute_one_scenario(client, scenario))
+                result = self._execute_one_scenario(client, scenario)
+                result = self._apply_failure_triage_and_rerun(
+                    client=client,
+                    scenario=scenario,
+                    result=result,
+                )
+                results.append(result)
         return results
+
+    def _apply_failure_triage_and_rerun(
+        self,
+        *,
+        client: Any,
+        scenario: TestScenario,
+        result: ScenarioExecutionResult,
+    ) -> ScenarioExecutionResult:
+        verification = (
+            dict(result.verification) if isinstance(result.verification, dict) else {}
+        )
+        taxonomy = self._classify_failure_taxonomy(scenario=scenario, result=result)
+        verification["failure_taxonomy"] = taxonomy
+
+        if str(result.verdict).lower() == "pass":
+            result.verification = verification
+            return result
+        if str(result.verdict).lower() == "blocked":
+            result.verification = verification
+            return result
+
+        rerun_attempts = max(1, int(FLAKY_RERUN_MAX_ATTEMPTS)) - 1
+        rerun_results: List[ScenarioExecutionResult] = []
+        for _ in range(rerun_attempts):
+            rerun_results.append(self._execute_one_scenario(client, scenario))
+
+        pass_count = sum(1 for item in rerun_results if str(item.verdict).lower() == "pass")
+        fail_count = len(rerun_results) - pass_count
+        all_statuses = [result.actual_status] + [item.actual_status for item in rerun_results]
+        all_verdicts = [str(result.verdict).lower()] + [
+            str(item.verdict).lower() for item in rerun_results
+        ]
+        distinct_statuses = {
+            int(item) for item in all_statuses if item is not None and str(item).isdigit()
+        }
+        distinct_verdicts = {item for item in all_verdicts if item}
+        flaky = bool(
+            rerun_results
+            and (
+                len(distinct_verdicts) > 1
+                or len(distinct_statuses) > 1
+                or (pass_count > 0 and fail_count > 0)
+                or (pass_count > 0 and str(result.verdict).lower() != "pass")
+            )
+        )
+
+        verification["flaky_check"] = {
+            "reruns": int(len(rerun_results)),
+            "pass_count": int(pass_count),
+            "fail_count": int(fail_count),
+            "statuses": [item for item in all_statuses],
+            "verdicts": all_verdicts,
+            "flaky": bool(flaky),
+        }
+        verification["repair_suggestion"] = self._derive_runtime_repair_suggestion(
+            scenario=scenario,
+            result=result,
+            taxonomy=taxonomy,
+        )
+        if flaky:
+            verification["flaky_check"]["stabilized_verdict"] = "suspect"
+            verification["passed"] = False
+            verification["verdict"] = "suspect"
+            result.verdict = "suspect"
+            result.passed = False
+        result.verification = verification
+        return result
+
+    def _classify_failure_taxonomy(
+        self,
+        *,
+        scenario: TestScenario,
+        result: ScenarioExecutionResult,
+    ) -> Dict[str, Any]:
+        verdict = str(getattr(result, "verdict", "fail") or "fail").strip().lower()
+        method = str(getattr(scenario, "method", "") or "").upper()
+        operation_key = self._operation_key(method, str(getattr(scenario, "endpoint", "") or ""))
+        op_meta = self._operation_index.get(operation_key, {})
+        documented = set(op_meta.get("response_statuses", []) if isinstance(op_meta, dict) else [])
+        actual = result.actual_status
+        expected = int(getattr(result, "expected_status", 0) or 0)
+        response_excerpt = str(getattr(result, "response_excerpt", "") or "").lower()
+        error_text = str(getattr(result, "error", "") or "").lower()
+        endpoint_resolved = str(getattr(result, "endpoint_resolved", "") or "")
+
+        if verdict == "pass":
+            return {"category": "none", "kind": "none", "reason": "passed", "confidence": 1.0}
+        if verdict == "blocked":
+            return {"category": "safety_block", "kind": "policy", "reason": "unsafe_action_blocked", "confidence": 1.0}
+        if "timeout" in error_text or "connection" in error_text:
+            return {"category": "environment_error", "kind": "env_issue", "reason": "transport_failure", "confidence": 0.95}
+        if actual in {500, 502, 503, 504}:
+            return {"category": "server_error", "kind": "service_issue", "reason": f"http_{actual}", "confidence": 0.95}
+        if actual == 405 and endpoint_resolved.endswith("/"):
+            return {"category": "path_param_empty_segment", "kind": "agent_issue", "reason": "resolved_path_trailing_slash", "confidence": 0.95}
+        if actual is not None and actual in documented and expected not in documented:
+            return {"category": "expectation_mismatch_documented", "kind": "agent_issue", "reason": "expected_not_in_documented_statuses", "confidence": 0.9}
+        if "missing required field" in response_excerpt:
+            return {"category": "request_body_missing_fields", "kind": "agent_issue", "reason": "payload_missing_required", "confidence": 0.85}
+        return {"category": "behavioral_regression", "kind": "service_or_spec_issue", "reason": "assertion_failed", "confidence": 0.7}
+
+    def _derive_runtime_repair_suggestion(
+        self,
+        *,
+        scenario: TestScenario,
+        result: ScenarioExecutionResult,
+        taxonomy: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        category = str(taxonomy.get("category", "") or "")
+        method = str(getattr(scenario, "method", "") or "").upper()
+        operation_key = self._operation_key(method, str(getattr(scenario, "endpoint", "") or ""))
+        op_meta = self._operation_index.get(operation_key, {})
+        documented = set(op_meta.get("response_statuses", []) if isinstance(op_meta, dict) else [])
+        actual = result.actual_status
+
+        if category in {"expectation_mismatch_documented", "path_param_empty_segment"}:
+            if actual is not None and int(actual) in {int(item) for item in documented if str(item).isdigit()}:
+                return {
+                    "type": "override_expected_status",
+                    "expected_status": int(actual),
+                    "confidence": 0.9,
+                    "reason": category,
+                }
+        if category == "request_body_missing_fields" and method in {"POST", "PUT", "PATCH"}:
+            return {
+                "type": "repair_request_body",
+                "repair_request_body": True,
+                "confidence": 0.85,
+                "reason": category,
+            }
+        return {}
+
+    def _ingest_runtime_repair_suggestions(
+        self,
+        *,
+        scenarios: List[TestScenario],
+        results: List[ScenarioExecutionResult],
+    ) -> Dict[str, Any]:
+        rules = self.learning_state.setdefault("scenario_repair_rules", {})
+        if not isinstance(rules, dict):
+            rules = {}
+            self.learning_state["scenario_repair_rules"] = rules
+
+        applied = 0
+        examples: List[Dict[str, Any]] = []
+        for scenario, result in zip(scenarios, results):
+            verification = result.verification if isinstance(result.verification, dict) else {}
+            suggestion = verification.get("repair_suggestion", {})
+            if not isinstance(suggestion, dict) or not suggestion:
+                continue
+            fingerprint = self._scenario_fingerprint(scenario)
+            existing = rules.get(fingerprint, {})
+            rule = dict(existing) if isinstance(existing, dict) else {}
+            changed = False
+            if suggestion.get("type") == "override_expected_status":
+                try:
+                    proposed = int(suggestion.get("expected_status"))
+                    if int(rule.get("override_expected_status", -1)) != proposed:
+                        rule["override_expected_status"] = proposed
+                        changed = True
+                except Exception:
+                    pass
+            if bool(suggestion.get("repair_request_body")) and not bool(
+                rule.get("repair_request_body")
+            ):
+                rule["repair_request_body"] = True
+                changed = True
+            if not changed:
+                continue
+            rule["runtime_suggested"] = True
+            rule["runtime_reason"] = str(suggestion.get("reason", ""))
+            rules[fingerprint] = rule
+            applied += 1
+            if len(examples) < RUNTIME_REPAIR_SUGGESTION_LIMIT:
+                examples.append(
+                    {
+                        "scenario": result.name,
+                        "fingerprint": fingerprint,
+                        "suggestion": suggestion,
+                    }
+                )
+        self.learning_state["scenario_repair_rules"] = rules
+        return {"applied": int(applied), "examples": examples}
 
     def _prepare_scenarios_for_execution_and_scripts(
         self, scenarios: List[TestScenario]
@@ -5335,7 +6028,7 @@ class QASpecialistAgent:
             operation_key = self._operation_key(method, scenario.endpoint)
             op_meta = self._operation_index.get(operation_key, {})
             if isinstance(op_meta, dict):
-                scenario.expected_status = self._normalize_expected_status_for_execution(
+                self._apply_intent_aware_execution_normalization(
                     scenario,
                     method=method,
                     op_meta=op_meta,
@@ -5344,12 +6037,299 @@ class QASpecialistAgent:
                     scenario,
                     op_meta=op_meta,
                 )
+                scenario.expected_status = self._normalize_expected_status_for_execution(
+                    scenario,
+                    method=method,
+                    op_meta=op_meta,
+                )
             rendered_headers = self._render_headers(scenario.headers)
             scenario.headers = self._normalize_auth_headers_for_execution(
                 scenario, method, rendered_headers
             )
             prepared.append(scenario)
         return prepared
+
+    def _apply_intent_aware_execution_normalization(
+        self,
+        scenario: TestScenario,
+        *,
+        method: str,
+        op_meta: Dict[str, Any],
+    ) -> None:
+        intent = self._infer_scenario_execution_intent(
+            scenario=scenario,
+            method=method,
+            op_meta=op_meta,
+        )
+        self._annotate_scenario_with_intent(scenario, intent)
+        primary_intent = str(intent.get("primary", "generic") or "generic")
+        operation_key = self._operation_key(method, str(scenario.endpoint))
+        auth_required = operation_key in self._auth_required_ops
+        placeholders = [
+            str(item).strip()
+            for item in PATH_PARAM_PATTERN.findall(str(scenario.endpoint or ""))
+            if str(item).strip()
+        ]
+        path_safe_params = self._coerce_valid_path_params(
+            endpoint=str(scenario.endpoint),
+            params=dict(scenario.params or {}),
+            op_meta=op_meta,
+        )
+        required_fields = [
+            str(item) for item in list(op_meta.get("required_fields", []) or []) if str(item).strip()
+        ]
+
+        if primary_intent == "auth_negative":
+            scenario.params = path_safe_params
+            if method in {"POST", "PUT", "PATCH"}:
+                self._repair_scenario_body_from_spec(scenario, op_meta)
+            if auth_required:
+                scenario.expected_status = 401
+                scenario.headers = self._build_auth_negative_headers(scenario)
+            return
+
+        # For all non-auth intents, force a valid bearer token when auth is required.
+        if auth_required:
+            scenario.headers = self._build_valid_auth_headers(scenario)
+
+        if primary_intent == "path_missing":
+            params = dict(path_safe_params)
+            for name in placeholders:
+                raw = params.get(name)
+                if raw is None or not str(raw).strip():
+                    params[name] = MISSING_PATH_PARAM_SENTINEL
+            scenario.params = params
+            if method in {"POST", "PUT", "PATCH"}:
+                self._repair_scenario_body_from_spec(scenario, op_meta)
+            scenario.expected_status = self._normalize_missing_path_expected_status(op_meta=op_meta)
+            return
+
+        if primary_intent == "path_lookup_not_found":
+            params = dict(path_safe_params)
+            for name in placeholders:
+                params[name] = "nonexistent_dependency_id"
+            scenario.params = params
+            if method in {"POST", "PUT", "PATCH"}:
+                self._repair_scenario_body_from_spec(scenario, op_meta)
+            scenario.expected_status = 404
+            return
+
+        if primary_intent == "body_missing_required":
+            scenario.params = path_safe_params
+            body = deepcopy(scenario.body) if isinstance(scenario.body, dict) else {}
+            if not body:
+                body = self._build_seed_body_from_operation_meta(op_meta, expect_negative=False)
+            missing_field = required_fields[0] if required_fields else ""
+            if missing_field:
+                body.pop(missing_field, None)
+            scenario.body = body
+            scenario.expected_status = 400
+            return
+
+        if primary_intent == "query_validation":
+            params = dict(path_safe_params)
+            has_non_path_query = any(str(k) not in set(placeholders) for k in params.keys())
+            if not has_non_path_query:
+                params["q"] = "'; DROP TABLE users; --"
+            scenario.params = params
+            if method in {"POST", "PUT", "PATCH"}:
+                self._repair_scenario_body_from_spec(scenario, op_meta)
+            scenario.expected_status = 400
+            return
+
+        if primary_intent in {"happy_path", "integration"}:
+            scenario.params = path_safe_params
+            if method in {"POST", "PUT", "PATCH"}:
+                self._repair_scenario_body_from_spec(scenario, op_meta)
+            if int(getattr(scenario, "expected_status", 0) or 0) >= 400:
+                scenario.expected_status = self._pick_happy_status_for_operation(method, op_meta)
+            return
+
+        # Generic fallback: prefer orthogonal negatives (single-fault execution).
+        if bool(intent.get("path_conflict", False)):
+            scenario.params = path_safe_params
+        if method in {"POST", "PUT", "PATCH"} and bool(intent.get("body_conflict", False)):
+            self._repair_scenario_body_from_spec(scenario, op_meta)
+
+    def _infer_scenario_execution_intent(
+        self,
+        *,
+        scenario: TestScenario,
+        method: str,
+        op_meta: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        scenario_type = str(getattr(scenario.test_type, "value", scenario.test_type)).lower()
+        strategy = str(self._extract_rl_mutation_strategy(scenario))
+        text = " ".join(
+            [
+                str(getattr(scenario, "name", "") or ""),
+                str(getattr(scenario, "description", "") or ""),
+                " ".join(str(item) for item in list(getattr(scenario, "assertions", []) or [])),
+            ]
+        ).lower()
+        placeholders = [
+            str(item).strip()
+            for item in PATH_PARAM_PATTERN.findall(str(scenario.endpoint or ""))
+            if str(item).strip()
+        ]
+        params = dict(scenario.params or {})
+        path_param_schemas = (
+            op_meta.get("path_param_schemas", {})
+            if isinstance(op_meta.get("path_param_schemas", {}), dict)
+            else {}
+        )
+        query_names = set(str(item) for item in list(op_meta.get("query_param_names", []) or []))
+        required_fields = [
+            str(item) for item in list(op_meta.get("required_fields", []) or []) if str(item).strip()
+        ]
+        body = scenario.body if isinstance(scenario.body, dict) else {}
+        operation_key = self._operation_key(method, str(scenario.endpoint))
+        auth_required = operation_key in self._auth_required_ops
+
+        missing_path_names: List[str] = []
+        invalid_path_values: List[str] = []
+        for name in placeholders:
+            raw = params.get(name)
+            raw_text = str(raw).strip() if raw is not None else ""
+            if raw is None or raw_text == "":
+                missing_path_names.append(name)
+                continue
+            lower_value = raw_text.lower()
+            if (
+                raw_text == MISSING_PATH_PARAM_SENTINEL
+                or any(token in lower_value for token in ("nonexistent", "notfound", "missing", "invalid"))
+                or bool(re.fullmatch(r"9{3,}", raw_text))
+            ):
+                invalid_path_values.append(name)
+                continue
+            schema = path_param_schemas.get(name, {}) if isinstance(path_param_schemas, dict) else {}
+            field_type = str((schema or {}).get("type", "")).strip().lower()
+            if field_type in {"integer", "number"} and not raw_text.lstrip("-").isdigit():
+                invalid_path_values.append(name)
+
+        missing_required_body = [
+            field
+            for field in required_fields
+            if field not in body or body.get(field) in (None, "")
+        ]
+        unknown_query = [
+            str(key)
+            for key in params.keys()
+            if str(key) not in set(placeholders) and str(key) not in query_names
+        ]
+
+        auth_intent = bool(
+            auth_required
+            and (
+                self._is_auth_negative_scenario(scenario)
+                or strategy in {"missing_auth", "invalid_auth"}
+                or "unauthorized" in text
+            )
+        )
+        path_missing_intent = bool(
+            missing_path_names
+            and self._scenario_targets_missing_path_parameter(
+                scenario=scenario,
+                missing_placeholders=missing_path_names,
+            )
+        )
+        path_lookup_intent = bool(
+            strategy == "path_not_found"
+            or (invalid_path_values and not path_missing_intent)
+            or (
+                placeholders
+                and int(getattr(scenario, "expected_status", 0) or 0) == 404
+                and scenario_type in {"input_validation", "error_handling", "edge_cases", "boundary_testing"}
+            )
+        )
+        body_missing_intent = bool(
+            method in {"POST", "PUT", "PATCH"}
+            and (
+                strategy in {"missing_required_field", "learned_missing_required_field", "learned_required_null"}
+                or (
+                    scenario_type in {"input_validation", "error_handling", "boundary_testing", "security"}
+                    and bool(missing_required_body)
+                )
+            )
+        )
+        query_validation_intent = bool(
+            strategy in {"query_fuzz", "query_boundary_extreme"}
+            or (
+                method == "GET"
+                and scenario_type in {"input_validation", "error_handling", "boundary_testing", "security"}
+                and bool(unknown_query)
+            )
+        )
+
+        primary = "generic_negative"
+        if auth_intent:
+            primary = "auth_negative"
+        elif path_missing_intent:
+            primary = "path_missing"
+        elif path_lookup_intent:
+            primary = "path_lookup_not_found"
+        elif body_missing_intent:
+            primary = "body_missing_required"
+        elif query_validation_intent:
+            primary = "query_validation"
+        elif scenario_type in {"happy_path", "performance"}:
+            primary = "happy_path"
+        elif scenario_type == "integration":
+            primary = "integration"
+
+        active_axes = int(auth_intent) + int(path_missing_intent or path_lookup_intent) + int(body_missing_intent) + int(query_validation_intent)
+        return {
+            "primary": primary,
+            "strategy": strategy,
+            "missing_path_names": missing_path_names,
+            "invalid_path_values": invalid_path_values,
+            "missing_required_body": missing_required_body,
+            "unknown_query": unknown_query,
+            "active_axes": int(active_axes),
+            "path_conflict": bool(primary not in {"path_missing", "path_lookup_not_found"} and (missing_path_names or invalid_path_values)),
+            "body_conflict": bool(primary != "body_missing_required" and bool(missing_required_body)),
+        }
+
+    def _annotate_scenario_with_intent(self, scenario: TestScenario, intent: Dict[str, Any]) -> None:
+        assertions = list(scenario.assertions or [])
+        filtered = [
+            item
+            for item in assertions
+            if not str(item).startswith("intent_primary:") and not str(item).startswith("intent_axes:")
+        ]
+        primary = str(intent.get("primary", "generic_negative"))
+        axes = int(intent.get("active_axes", 0) or 0)
+        filtered.append(f"intent_primary:{primary}")
+        filtered.append(f"intent_axes:{axes}")
+        if bool(intent.get("path_conflict", False)):
+            filtered.append("intent_path_conflict")
+        if bool(intent.get("body_conflict", False)):
+            filtered.append("intent_body_conflict")
+        scenario.assertions = filtered
+
+    def _build_valid_auth_headers(self, scenario: TestScenario) -> Dict[str, str]:
+        headers = dict(self._render_headers(scenario.headers))
+        headers["Authorization"] = "Bearer valid_token_123"
+        headers.pop("authorization", None)
+        return headers
+
+    def _build_auth_negative_headers(self, scenario: TestScenario) -> Dict[str, str]:
+        headers = dict(self._render_headers(scenario.headers))
+        strategy = str(self._extract_rl_mutation_strategy(scenario))
+        scenario_text = " ".join(
+            [
+                str(getattr(scenario, "name", "") or ""),
+                str(getattr(scenario, "description", "") or ""),
+            ]
+        ).lower()
+        missing_hint = strategy == "missing_auth" or "missing auth" in scenario_text or "without auth" in scenario_text
+        if missing_hint:
+            headers.pop("Authorization", None)
+            headers.pop("authorization", None)
+            return headers
+        headers["Authorization"] = "Bearer invalid"
+        headers.pop("authorization", None)
+        return headers
 
     def _normalize_expected_status_for_execution(
         self,
@@ -5364,6 +6344,15 @@ class QASpecialistAgent:
             expected_status=int(scenario.expected_status),
         )
         response_statuses = set(op_meta.get("response_statuses", []) or [])
+        operation_key = self._operation_key(method, scenario.endpoint)
+        auth_required = operation_key in self._auth_required_ops
+        if (
+            auth_required
+            and self._is_auth_negative_scenario(scenario)
+            and int(normalized_status) in AUTH_NEGATIVE_STATUS_CODES
+        ):
+            # Keep auth-negative expectations stable even if undocumented in spec.
+            return int(normalized_status)
 
         # Boundary cases that still satisfy the schema should assert the happy
         # path status instead of forcing a 4xx expectation.
@@ -5379,10 +6368,27 @@ class QASpecialistAgent:
         ):
             return int(self._pick_happy_status_for_operation(method, op_meta))
 
+        # Some APIs allow unknown/extra JSON fields (additionalProperties=true).
+        # If payload is otherwise schema-valid, treat these as happy-path writes.
+        if (
+            int(normalized_status) in NEGATIVE_STATUS_CODES
+            and method in {"POST", "PUT", "PATCH"}
+            and isinstance(scenario.body, dict)
+            and self._payload_has_only_extra_fields(
+                body=dict(scenario.body or {}),
+                request_schema=op_meta.get("request_schema", {}),
+            )
+            and self._request_body_satisfies_schema(
+                body=dict(scenario.body or {}),
+                request_schema=op_meta.get("request_schema", {}),
+            )
+        ):
+            return int(self._pick_happy_status_for_operation(method, op_meta))
+
         # Unconstrained string path params often map to resource lookup misses
         # (404), not format-validation errors (400).
         if (
-            scenario.test_type == TestType.INPUT_VALIDATION
+            scenario.test_type in {TestType.INPUT_VALIDATION, TestType.BOUNDARY_TESTING}
             and int(normalized_status) == 400
             and method in {"GET", "DELETE", "PATCH", "PUT"}
         ):
@@ -5412,22 +6418,127 @@ class QASpecialistAgent:
             ):
                 return int(self._pick_happy_status_for_operation(method, op_meta))
 
+        # Reconcile expectations with documented statuses for the selected
+        # operation to reduce false negatives from mismatched assumptions.
+        if response_statuses and int(normalized_status) not in response_statuses:
+            # If operation exists for this method/path, 405 should not be
+            # expected unless explicitly documented.
+            if int(normalized_status) == 405:
+                return int(self._pick_happy_status_for_operation(method, op_meta))
+
+            negative_preference = [400, 401, 403, 404, 409, 422]
+            if int(normalized_status) in NEGATIVE_STATUS_CODES:
+                for code in negative_preference:
+                    if code in response_statuses:
+                        return int(code)
+            return int(self._pick_happy_status_for_operation(method, op_meta))
+
         return int(normalized_status)
+
+    def _normalize_query_params_for_execution(
+        self, scenario: TestScenario, *, op_meta: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        params = dict(scenario.params or {})
+        placeholders = set(PATH_PARAM_PATTERN.findall(str(scenario.endpoint or "")))
+        query_names = set(str(item) for item in (op_meta.get("query_param_names", []) or []))
+
+        path_only = {k: v for k, v in params.items() if str(k) in placeholders}
+        query_only = {k: v for k, v in params.items() if str(k) not in placeholders}
+
+        expected_status = int(getattr(scenario, "expected_status", 0) or 0)
+        scenario_type = str(getattr(scenario.test_type, "value", scenario.test_type)).lower()
+        positive_scenario = 200 <= expected_status < 300
+
+        if positive_scenario:
+            # Keep happy/integration/performance scenarios deterministic by
+            # removing unknown query params and coercing known params to safe values.
+            filtered: Dict[str, Any] = {}
+            for key, value in query_only.items():
+                if str(key) in query_names:
+                    filtered[str(key)] = value
+            for qname in sorted(query_names):
+                if qname in filtered:
+                    raw_value = filtered[qname]
+                    qlower = str(qname).lower()
+                    if ("limit" in qlower or "size" in qlower) and str(raw_value).isdigit():
+                        parsed = int(str(raw_value))
+                        if parsed <= 0 or parsed > 1000:
+                            filtered[qname] = 10
+                    elif ("page" in qlower or "offset" in qlower) and str(raw_value).lstrip("-").isdigit():
+                        parsed = int(str(raw_value))
+                        if parsed < 0:
+                            filtered[qname] = 0 if "offset" in qlower else 1
+            return {**path_only, **filtered}
+
+        # For negative scenarios, keep generated params intact to preserve
+        # fuzzing power for validation/security/error checks.
+        if scenario_type in {"security", "input_validation", "boundary_testing", "error_handling"}:
+            return params
+        return params
 
     def _normalize_path_params_for_execution(
         self, scenario: TestScenario, *, op_meta: Dict[str, Any]
     ) -> Dict[str, Any]:
         params = dict(scenario.params or {})
-        placeholders = PATH_PARAM_PATTERN.findall(str(scenario.endpoint or ""))
+        placeholders = [
+            str(item).strip()
+            for item in PATH_PARAM_PATTERN.findall(str(scenario.endpoint or ""))
+            if str(item).strip()
+        ]
         if not placeholders:
             return params
 
+        scenario_type = str(getattr(scenario.test_type, "value", scenario.test_type)).lower()
         expected_status = int(getattr(scenario, "expected_status", 0) or 0)
+        path_param_schemas = (
+            op_meta.get("path_param_schemas", {})
+            if isinstance(op_meta.get("path_param_schemas", {}), dict)
+            else {}
+        )
+        missing_placeholders: List[str] = []
+        for name in placeholders:
+            value = params.get(name)
+            if value is None:
+                missing_placeholders.append(name)
+                continue
+            if isinstance(value, str) and not value.strip():
+                missing_placeholders.append(name)
+
+        if missing_placeholders:
+            if scenario_type in {"authentication", "authorization"} or expected_status in AUTH_NEGATIVE_STATUS_CODES:
+                for name in missing_placeholders:
+                    params[name] = self._default_path_param_value(
+                        name,
+                        path_param_schemas.get(name, {}),
+                    )
+            elif self._scenario_targets_missing_path_parameter(
+                scenario=scenario,
+                missing_placeholders=missing_placeholders,
+            ):
+                for name in missing_placeholders:
+                    params[name] = MISSING_PATH_PARAM_SENTINEL
+                scenario.expected_status = self._normalize_missing_path_expected_status(op_meta=op_meta)
+                assertions = list(scenario.assertions or [])
+                if "path_param_missing_intent" not in assertions:
+                    assertions.append("path_param_missing_intent")
+                scenario.assertions = assertions
+                expected_status = int(getattr(scenario, "expected_status", expected_status) or expected_status)
+            else:
+                # Missing path params are usually generation artifacts for unrelated
+                # scenarios; default them so intent stays aligned.
+                for name in missing_placeholders:
+                    params[name] = self._default_path_param_value(
+                        name,
+                        path_param_schemas.get(name, {}),
+                    )
+
         if expected_status != 404:
             return params
 
         for name in placeholders:
             raw_value = str(params.get(name, "")).strip()
+            if raw_value == MISSING_PATH_PARAM_SENTINEL:
+                continue
             lower_value = raw_value.lower()
             has_not_found_hint = any(
                 token in lower_value for token in ("nonexistent", "notfound", "missing", "invalid")
@@ -5435,6 +6546,72 @@ class QASpecialistAgent:
             if not has_not_found_hint:
                 params[name] = "nonexistent_dependency_id"
         return params
+
+    def _default_path_param_value(self, name: str, schema: Optional[Dict[str, Any]] = None) -> str:
+        raw_schema = schema if isinstance(schema, dict) else {}
+        field_type = str(raw_schema.get("type", "")).strip().lower()
+        if field_type in {"integer", "number"}:
+            return "123"
+        if field_type == "boolean":
+            return "true"
+        lowered = str(name or "").strip().lower()
+        if lowered.endswith("id") or lowered == "id":
+            return "123"
+        return "sample"
+
+    def _scenario_targets_missing_path_parameter(
+        self,
+        *,
+        scenario: TestScenario,
+        missing_placeholders: List[str],
+    ) -> bool:
+        if not missing_placeholders:
+            return False
+        scenario_type = str(getattr(scenario.test_type, "value", scenario.test_type)).lower()
+        if scenario_type in {"authentication", "authorization"}:
+            return False
+        try:
+            expected_status = int(getattr(scenario, "expected_status", 0) or 0)
+        except Exception:
+            expected_status = 0
+        if expected_status in {404, 405}:
+            return True
+
+        name = str(getattr(scenario, "name", "") or "")
+        description = str(getattr(scenario, "description", "") or "")
+        assertions = " ".join(str(item) for item in list(getattr(scenario, "assertions", []) or []))
+        haystack = " ".join([name, description, assertions]).lower()
+        haystack = re.sub(r"\s+", " ", haystack).strip()
+        phrase_patterns = (
+            r"\bmissing\b.{0,40}\bpath\b.{0,20}\bparam",
+            r"\bwithout\b.{0,40}\bpath\b.{0,20}\bparam",
+            r"\bempty\b.{0,40}\bpath\b.{0,20}\bparam",
+            r"\bpath\b.{0,25}\bparameter\b",
+        )
+        if any(re.search(pattern, haystack) for pattern in phrase_patterns):
+            return True
+
+        for pname in missing_placeholders:
+            pname_l = str(pname).strip().lower()
+            if not pname_l:
+                continue
+            if re.search(rf"\bmissing\b.{0,30}\b{re.escape(pname_l)}\b", haystack):
+                return True
+            if re.search(rf"\bwithout\b.{0,30}\b{re.escape(pname_l)}\b", haystack):
+                return True
+        return False
+
+    def _normalize_missing_path_expected_status(self, *, op_meta: Dict[str, Any]) -> int:
+        response_statuses = {
+            int(item)
+            for item in list((op_meta or {}).get("response_statuses", []) or [])
+            if str(item).isdigit()
+        }
+        if 405 in response_statuses:
+            return 405
+        if 404 in response_statuses:
+            return 404
+        return 404
 
     def _path_params_are_unconstrained_strings(
         self, path_param_schemas: Dict[str, Any]
@@ -5462,6 +6639,31 @@ class QASpecialistAgent:
             ):
                 return False
         return True
+
+    def _payload_has_only_extra_fields(self, *, body: Dict[str, Any], request_schema: Any) -> bool:
+        if not isinstance(body, dict):
+            return False
+        schema = request_schema if isinstance(request_schema, dict) else {}
+        properties = schema.get("properties", {}) if isinstance(schema.get("properties", {}), dict) else {}
+        if not properties:
+            return False
+        required_fields = [str(item) for item in (schema.get("required", []) or []) if str(item).strip()]
+        if not required_fields:
+            return False
+        if any(field not in body or body.get(field) in (None, "") for field in required_fields):
+            return False
+        extra_fields = [key for key in body.keys() if str(key) not in properties]
+        if not extra_fields:
+            return False
+        known_fields_valid = True
+        for field_name, value in body.items():
+            field_schema = properties.get(str(field_name))
+            if not isinstance(field_schema, dict):
+                continue
+            if not self._value_satisfies_schema(value, field_schema):
+                known_fields_valid = False
+                break
+        return bool(known_fields_valid)
 
     def _request_body_satisfies_schema(
         self, *, body: Dict[str, Any], request_schema: Any
@@ -5587,12 +6789,23 @@ class QASpecialistAgent:
         self, client: Any, scenario: TestScenario
     ) -> ScenarioExecutionResult:
         method = scenario.method.upper()
+        display_name = self._scenario_display_name(scenario)
+        mutation_strategy = self._extract_rl_mutation_strategy(scenario)
+        history_seeded = self._is_history_seeded_scenario(scenario)
         endpoint_resolved = self._resolve_endpoint_path(
             scenario.endpoint, scenario.params, scenario.expected_status
         )
         headers = self._render_headers(scenario.headers)
         headers = self._normalize_auth_headers_for_execution(scenario, method, headers)
-        query_params = self._strip_path_params(scenario.endpoint, scenario.params)
+        method_key = self._operation_key(method, scenario.endpoint)
+        op_meta = self._operation_index.get(method_key, {})
+        if not isinstance(op_meta, dict):
+            op_meta = {}
+        normalized_params = self._normalize_query_params_for_execution(
+            scenario,
+            op_meta=op_meta,
+        )
+        query_params = self._strip_path_params(scenario.endpoint, normalized_params)
         body = scenario.body if method in {"POST", "PUT", "PATCH"} else None
 
         started = time.perf_counter()
@@ -5613,6 +6826,9 @@ class QASpecialistAgent:
                 query_params=query_params,
                 body=body,
             )
+            intent_meta = self._scenario_intent_metadata(scenario)
+            if intent_meta:
+                verification["intent"] = intent_meta
             verdict = str(verification.get("verdict", "fail"))
             passed = bool(verdict == "pass")
             response_excerpt = self._response_excerpt(response)
@@ -5630,6 +6846,10 @@ class QASpecialistAgent:
                 duration_ms=round(duration_ms, 3),
                 response_excerpt=response_excerpt,
                 verification=verification,
+                display_name=display_name,
+                name_raw=str(scenario.name),
+                mutation_strategy=str(mutation_strategy),
+                history_seeded=bool(history_seeded),
             )
         except Exception as exc:
             duration_ms = (time.perf_counter() - started) * 1000.0
@@ -5663,7 +6883,37 @@ class QASpecialistAgent:
                         "issues": [str(exc)],
                     },
                 },
+                display_name=display_name,
+                name_raw=str(scenario.name),
+                mutation_strategy=str(mutation_strategy),
+                history_seeded=bool(history_seeded),
             )
+
+    def _scenario_intent_metadata(self, scenario: TestScenario) -> Dict[str, Any]:
+        primary = ""
+        axes = 0
+        path_conflict = False
+        body_conflict = False
+        for item in list(scenario.assertions or []):
+            raw = str(item or "").strip()
+            if raw.startswith("intent_primary:"):
+                primary = raw.split(":", 1)[1].strip()
+            elif raw.startswith("intent_axes:"):
+                value = raw.split(":", 1)[1].strip()
+                if str(value).isdigit():
+                    axes = int(value)
+            elif raw == "intent_path_conflict":
+                path_conflict = True
+            elif raw == "intent_body_conflict":
+                body_conflict = True
+        if not primary and axes <= 0 and not path_conflict and not body_conflict:
+            return {}
+        return {
+            "primary": primary or "unknown",
+            "axes": int(axes),
+            "path_conflict": bool(path_conflict),
+            "body_conflict": bool(body_conflict),
+        }
 
     def _resolve_endpoint_path(
         self, endpoint: str, params: Dict[str, Any], expected_status: int
@@ -5673,7 +6923,18 @@ class QASpecialistAgent:
             value = params.get(param_name)
             if value is None:
                 value = "999" if expected_status == 404 else "123"
-            resolved = resolved.replace("{" + param_name + "}", str(value))
+            placeholder = "{" + param_name + "}"
+            if str(value).strip() == MISSING_PATH_PARAM_SENTINEL:
+                resolved = resolved.replace("/" + placeholder, "")
+                resolved = resolved.replace(placeholder + "/", "")
+                resolved = resolved.replace(placeholder, "")
+                continue
+            resolved = resolved.replace(placeholder, str(value))
+        resolved = re.sub(r"/{2,}", "/", str(resolved or ""))
+        if not resolved.startswith("/"):
+            resolved = "/" + resolved
+        if not resolved:
+            resolved = "/"
         return resolved
 
     def _strip_path_params(
@@ -5846,6 +7107,37 @@ class QASpecialistAgent:
             "issues": [],
         }
         if not result["schema_found"]:
+            # Fallback sanity check so contract metrics are still informative
+            # when specs omit response schemas.
+            result["checked"] = True
+            if int(actual_status) == 204:
+                body_text = str(getattr(response, "text", "") or "").strip()
+                result["valid"] = body_text == ""
+                if body_text:
+                    result["issues"].append(
+                        "no_response_schema_defined_expected_empty_body_for_204"
+                    )
+                else:
+                    result["issues"].append(
+                        "no_response_schema_defined_used_empty_body_sanity_check"
+                    )
+                return result
+            try:
+                payload = response.json()
+                result["valid"] = isinstance(payload, (dict, list))
+                if result["valid"]:
+                    result["issues"].append(
+                        "no_response_schema_defined_used_json_sanity_check"
+                    )
+                else:
+                    result["issues"].append(
+                        "no_response_schema_defined_non_container_json_payload"
+                    )
+            except Exception:
+                result["valid"] = False
+                result["issues"].append(
+                    "no_response_schema_defined_response_not_json"
+                )
             return result
 
         payload: Any = None
@@ -5900,6 +7192,8 @@ class QASpecialistAgent:
         contract_failed = 0
         corrected_expectations = 0
         unsafe_actions_blocked = 0
+        flaky_count = 0
+        failure_taxonomy_breakdown: Dict[str, int] = {}
         for result in results:
             item = by_type.setdefault(
                 result.test_type,
@@ -5926,6 +7220,15 @@ class QASpecialistAgent:
                 corrected_expectations += 1
             if str(result.error or "").startswith("unsafe_action_blocked"):
                 unsafe_actions_blocked += 1
+            flaky_check = verification.get("flaky_check", {}) if isinstance(verification.get("flaky_check", {}), dict) else {}
+            if bool(flaky_check.get("flaky", False)):
+                flaky_count += 1
+            taxonomy = verification.get("failure_taxonomy", {}) if isinstance(verification.get("failure_taxonomy", {}), dict) else {}
+            category = str(taxonomy.get("category", "") or "").strip().lower()
+            if category and category != "none":
+                failure_taxonomy_breakdown[category] = int(
+                    failure_taxonomy_breakdown.get(category, 0) + 1
+                )
 
         detected_endpoints = 0
         if isinstance(spec.get("paths"), dict):
@@ -5962,12 +7265,16 @@ class QASpecialistAgent:
         failed_examples = [
             {
                 "name": r.name,
+                "display_name": str(getattr(r, "display_name", "") or ""),
+                "name_raw": str(getattr(r, "name_raw", r.name) or r.name),
                 "method": r.method,
                 "endpoint": r.endpoint_resolved,
                 "expected_status": r.expected_status,
                 "actual_status": r.actual_status,
                 "verdict": str(getattr(r, "verdict", "fail") or "fail"),
                 "error": r.error,
+                "mutation_strategy": str(getattr(r, "mutation_strategy", "") or ""),
+                "history_seeded": bool(getattr(r, "history_seeded", False)),
             }
             for r in results
             if str(getattr(r, "verdict", "fail") or "fail") != "pass"
@@ -5996,6 +7303,15 @@ class QASpecialistAgent:
             "runtime_cap_hit": bool(self._runtime_cap_hit),
             "runtime_skipped_scenarios": int(self._runtime_skipped_count),
             "unsafe_actions_blocked": int(unsafe_actions_blocked),
+            "flaky_scenarios": int(flaky_count),
+            "flaky_ratio": round((flaky_count / total) if total else 0.0, 4),
+            "failure_taxonomy_breakdown": {
+                key: int(value)
+                for key, value in sorted(
+                    failure_taxonomy_breakdown.items(),
+                    key=lambda item: item[0],
+                )
+            },
             "max_runtime_sec": self.max_runtime_sec,
             "environment_profile": self.environment_profile,
             "test_type_breakdown": by_type,
@@ -6162,10 +7478,13 @@ class QASpecialistAgent:
             memory_excerpts, limit=max(1, max_points)
         )
         delta_point = self._sanitize_focus_text(self._build_gam_delta_focus_point())
+        spec_signature_point = self._sanitize_focus_text(self._build_spec_signature_focus_point())
 
         combined: List[str] = []
         if delta_point:
             combined.append(self._smart_trim_text(delta_point, max_chars=220))
+        if spec_signature_point and len(combined) < max_points:
+            combined.append(self._smart_trim_text(spec_signature_point, max_chars=220))
         for point in excerpt_points:
             cleaned = self._sanitize_focus_text(str(point or ""))
             if not cleaned:
@@ -6176,7 +7495,9 @@ class QASpecialistAgent:
             if len(combined) >= max_points:
                 break
 
-        return combined[:max_points]
+        final_points = combined[:max_points]
+        self._remember_gam_focus_points(final_points)
+        return final_points
 
     def _build_rl_prompt_focus_points(self, limit: int = 3) -> List[str]:
         scenario_stats = self._scenario_stats_for_current_spec(
@@ -6326,6 +7647,8 @@ class QASpecialistAgent:
         focus_points: List[str] = []
         seen_texts: set[str] = set()
         seen_categories: set[str] = set()
+        recent_focus_keys = self._get_recent_gam_focus_keys()
+        recent_window = set(recent_focus_keys[-GAM_RECENT_FOCUS_WINDOW:])
 
         filtered: List[Dict[str, Any]] = []
         seen_title_keys: set[str] = set()
@@ -6337,6 +7660,8 @@ class QASpecialistAgent:
                 continue
             key = candidate_text.lower()
             if key in seen_texts:
+                continue
+            if self._normalize_focus_key(candidate_text) in recent_window:
                 continue
             source_key = str(candidate.get("source", "")).strip().lower()
             title_key = str(candidate.get("title", "")).strip().lower()
@@ -6350,6 +7675,23 @@ class QASpecialistAgent:
             candidate["category"] = _category(candidate_text)
             filtered.append(candidate)
 
+        if not filtered:
+            # If anti-repetition filtered everything, relax once.
+            relaxed: List[Dict[str, Any]] = []
+            seen_texts = set()
+            for candidate in candidates:
+                candidate_text = str(candidate.get("text", "")).strip()
+                if not candidate_text:
+                    continue
+                if float(candidate.get("score", 0.0)) <= -0.25:
+                    continue
+                key = candidate_text.lower()
+                if key in seen_texts:
+                    continue
+                seen_texts.add(key)
+                candidate["category"] = _category(candidate_text)
+                relaxed.append(candidate)
+            filtered = relaxed
         if not filtered:
             return []
 
@@ -7398,19 +8740,7 @@ class QASpecialistAgent:
         except Exception:
             expected_status = 0
 
-        if expected_status not in AUTH_NEGATIVE_STATUS_CODES:
-            return False
-
-        scenario_text = f"{scenario.name} {scenario.description}".lower()
-        auth_markers = (
-            "auth",
-            "token",
-            "unauthorized",
-            "forbidden",
-            "permission",
-            "access",
-        )
-        return any(marker in scenario_text for marker in auth_markers)
+        return expected_status in AUTH_NEGATIVE_STATUS_CODES
 
     def _run_agent_lightning_training(
         self,
@@ -7433,6 +8763,7 @@ class QASpecialistAgent:
             "workspace_id": self.workspace_id,
             "spec_key": self._spec_scope_key,
             "environment_profile": self.environment_profile,
+            "rl_train_mode": self.rl_train_mode,
             "pass_rate": summary["pass_rate"],
             "pass_threshold": summary["pass_threshold"],
             "meets_quality_gate": bool(summary.get("meets_quality_gate", False)),
@@ -7573,8 +8904,29 @@ class QASpecialistAgent:
                 "exploration focused",
             )
         )
+        endpoint_mentions: set[str] = set()
+        test_type_mentions: set[str] = set()
+        for item in selected:
+            excerpt_text = str(item.get("excerpt", "") or "")
+            for match in re.findall(r"(GET|POST|PUT|PATCH|DELETE)\s+(/[A-Za-z0-9_/{}/\-]+)", excerpt_text):
+                endpoint_mentions.add(f"{str(match[0]).upper()} {str(match[1])}")
+            for token in (
+                "authentication",
+                "authorization",
+                "input_validation",
+                "error_handling",
+                "boundary_testing",
+                "security",
+                "integration",
+                "edge_cases",
+                "performance",
+                "happy_path",
+            ):
+                if token in excerpt_text.lower():
+                    test_type_mentions.add(token)
         contract_checks = {
             "has_weak_pattern": bool(has_direct_weak_pattern),
+            "has_weak_pattern_or_proxy": bool(has_direct_weak_pattern or has_exploration_proxy),
             "has_trend_delta": any(
                 "trend" in str(item.get("excerpt", "")).lower()
                 or "delta" in str(item.get("excerpt", "")).lower()
@@ -7600,12 +8952,16 @@ class QASpecialistAgent:
                 else ("exploration_proxy" if has_exploration_proxy else "missing")
             ),
             "has_exploration_proxy": bool(has_exploration_proxy),
+            "has_diverse_endpoint_signal": len(endpoint_mentions) >= (2 if len(selected) >= 4 else 1),
+            "has_diverse_test_type_signal": len(test_type_mentions) >= (2 if len(selected) >= 4 else 1),
         }
         required_contract_keys = [
-            "has_weak_pattern",
+            "has_weak_pattern_or_proxy",
             "has_trend_delta",
             "has_spec_risk",
             "has_next_action",
+            "has_diverse_endpoint_signal",
+            "has_diverse_test_type_signal",
         ]
         missing_contract = [
             key for key in required_contract_keys if not bool(contract_checks.get(key))
@@ -7877,34 +9233,29 @@ class QASpecialistAgent:
             minimized_query = minimized.get("query", query)
             minimized_body = minimized.get("body", payload)
 
-            normalized_base = str(base_url_hint or "").rstrip("/")
-            endpoint_path = str(result.endpoint_resolved or "")
-            if endpoint_path.startswith("http://") or endpoint_path.startswith("https://"):
-                repro_url = endpoint_path
-            elif endpoint_path.startswith("/"):
-                repro_url = f"{normalized_base}{endpoint_path}"
-            else:
-                repro_url = f"{normalized_base}/{endpoint_path}"
-
-            curl_parts = [f"curl -X {scenario.method.upper()} '{repro_url}'"]
-            for key, value in headers.items():
-                if key.lower() == "authorization":
-                    value = "Bearer ***"
-                curl_parts.append(f"-H '{key}: {value}'")
-            if minimized_body is not None:
-                curl_parts.append("-H 'Content-Type: application/json'")
-                curl_parts.append(f"-d '{json.dumps(minimized_body, ensure_ascii=True)}'")
+            curl_command = self._build_curl_repro_command(
+                method=scenario.method.upper(),
+                base_url_hint=base_url_hint,
+                endpoint_resolved=str(result.endpoint_resolved or ""),
+                headers=headers,
+                query=minimized_query if isinstance(minimized_query, dict) else {},
+                body=minimized_body if isinstance(minimized_body, dict) else None,
+            )
 
             artifacts.append(
                 {
                     "fingerprint": fingerprint,
                     "name": result.name,
+                    "display_name": str(getattr(result, "display_name", "") or ""),
+                    "name_raw": str(getattr(result, "name_raw", result.name) or result.name),
                     "method": scenario.method.upper(),
                     "endpoint": result.endpoint_resolved,
                     "expected_status": int(result.expected_status),
                     "actual_status": result.actual_status,
                     "error": str(result.error or ""),
                     "response_excerpt": str(result.response_excerpt or ""),
+                    "mutation_strategy": str(getattr(result, "mutation_strategy", "") or ""),
+                    "history_seeded": bool(getattr(result, "history_seeded", False)),
                     "request": {
                         "headers": headers,
                         "query": query,
@@ -7915,11 +9266,61 @@ class QASpecialistAgent:
                         "body": minimized_body,
                         "status": minimized.get("status"),
                     },
-                    "curl_repro": " ".join(curl_parts),
+                    "curl_repro": curl_command,
                 }
             )
             if len(artifacts) >= max(1, int(limit)):
                 break
+
+    def _build_curl_repro_command(
+        self,
+        *,
+        method: str,
+        base_url_hint: str,
+        endpoint_resolved: str,
+        headers: Dict[str, Any],
+        query: Dict[str, Any],
+        body: Optional[Dict[str, Any]],
+    ) -> str:
+        normalized_base = str(base_url_hint or "").rstrip("/")
+        endpoint_path = str(endpoint_resolved or "")
+        if endpoint_path.startswith("http://") or endpoint_path.startswith("https://"):
+            repro_url = endpoint_path
+        elif endpoint_path.startswith("/"):
+            repro_url = f"{normalized_base}{endpoint_path}"
+        else:
+            repro_url = f"{normalized_base}/{endpoint_path}"
+
+        query_items: List[Tuple[str, Any]] = []
+        for key, value in (query or {}).items():
+            if value is None:
+                continue
+            if isinstance(value, list):
+                for item in value:
+                    query_items.append((str(key), item))
+            else:
+                query_items.append((str(key), value))
+        if query_items:
+            query_text = urlencode(query_items, doseq=True)
+            separator = "&" if "?" in repro_url else "?"
+            repro_url = f"{repro_url}{separator}{query_text}"
+
+        curl_parts = ["curl", "-X", str(method).upper(), shlex.quote(repro_url)]
+        rendered_header_keys: set[str] = set()
+        for key, value in (headers or {}).items():
+            key_text = str(key)
+            lower_key = key_text.lower()
+            rendered_header_keys.add(lower_key)
+            value_text = "Bearer ***" if lower_key == "authorization" else str(value)
+            curl_parts.extend(["-H", shlex.quote(f"{key_text}: {value_text}")])
+
+        if body is not None:
+            if "content-type" not in rendered_header_keys:
+                curl_parts.extend(["-H", shlex.quote("Content-Type: application/json")])
+            curl_parts.extend(
+                ["-d", shlex.quote(json.dumps(body, ensure_ascii=True, separators=(",", ":")))]
+            )
+        return " ".join(curl_parts)
 
     def _shrink_failed_input_for_repro(
         self,
@@ -8049,6 +9450,7 @@ class QASpecialistAgent:
                 "",
                 "## Generated Script Execution",
                 f"- Script Kind: `{metadata.get('script_kind', '')}`",
+                f"- RL Train Mode: `{metadata.get('rl_train_mode', '')}`",
                 f"- Status: `{script_execution.get('status', 'n/a')}`",
                 f"- Executed: `{script_execution.get('executed', False)}`",
                 f"- Script Path: `{script_execution.get('script_path', '')}`",
@@ -8252,6 +9654,7 @@ class QASpecialistAgent:
                 f"- Replay Buffer Size: `{training_stats.get('rl_buffer_size', 0)}`",
                 f"- Training Steps: `{training_stats.get('rl_training_steps', 0)}`",
                 f"- Training Enabled: `{training_stats.get('training_enabled', False)}`",
+                f"- Training Mode: `{training_stats.get('train_mode', 'periodic')}`",
             ]
         )
 
@@ -8347,6 +9750,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=sorted(SUPPORTED_SCRIPT_KINDS),
         help="Generated script kind to produce and execute (default: python_pytest)",
     )
+    parser.add_argument(
+        "--rl-train-mode",
+        default="periodic",
+        choices=["periodic"],
+        help="RL training mode (mandatory): periodic",
+    )
     return parser
 
 
@@ -8369,6 +9778,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         rl_checkpoint_path=args.rl_checkpoint,
         learning_state_path=args.learning_state,
         script_kind=args.script_kind,
+        rl_train_mode=args.rl_train_mode,
     )
 
     report = agent.run()
